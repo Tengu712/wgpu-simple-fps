@@ -1,3 +1,6 @@
+pub mod log;
+
 fn main() {
-    println!("Hello, world!");
+    debug!("main", "Hello, world!");
+    error!("main", "Something is wrong ({})!", 1);
 }
