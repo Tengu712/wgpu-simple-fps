@@ -52,7 +52,7 @@ impl<'a> ApplicationHandler for Application<'a> {
         let enabled_buttons_bits = WindowButtons::CLOSE.bits() | WindowButtons::MINIMIZE.bits();
         let enabled_buttons = WindowButtons::from_bits(enabled_buttons_bits).unwrap();
         window.set_enabled_buttons(enabled_buttons);
-        info!("Application.resumed", "a window has been created.");
+        info!("Application.resumed", "window created.");
 
         // create an arc of the window
         let window = Arc::new(window);
@@ -61,6 +61,7 @@ impl<'a> ApplicationHandler for Application<'a> {
         let renderer = Renderer::new(window.clone());
 
         // finish
+        info!("Application.resumed", "initialization done.");
         self.window = Some(window);
         self.renderer = Some(renderer);
     }

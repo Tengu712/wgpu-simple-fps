@@ -49,7 +49,7 @@ fn slice_to_u8slice<T>(a: &[T]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(a.as_ptr().cast::<u8>(), mem::size_of::<T>() * a.len()) }
 }
 
-/// A renderer.
+/// A renderer on WebGPU.
 ///
 /// It's depends on winit window.
 /// The lifetime `'a` refers to the surface's lifetime, which is the same as the window's.
@@ -65,6 +65,9 @@ pub struct Renderer<'a> {
 }
 
 impl<'a> Renderer<'a> {
+    /// A constructor.
+    ///
+    /// The arc of window is cloned in this.
     pub fn new(window: Arc<Window>) -> Self {
         // create an instance
         let instance = Instance::new(InstanceDescriptor {
@@ -100,8 +103,13 @@ impl<'a> Renderer<'a> {
         };
         info!(
             "Renderer.new",
-            "the adapter is selected: {}.",
+            "the adapter selected: {}.",
             adapter.get_info().name
+        );
+        info!(
+            "Renderer.new",
+            "the backend selected: {}.",
+            adapter.get_info().backend.to_str()
         );
 
         // get a device and a queue
@@ -205,7 +213,7 @@ impl<'a> Renderer<'a> {
         });
 
         // finish
-        info!("Renderer.new", "a renderer has been created.");
+        info!("Renderer.new", "renderer created.");
         Self {
             surface,
             device,
@@ -218,6 +226,9 @@ impl<'a> Renderer<'a> {
         }
     }
 
+    /// A method to render entities.
+    ///
+    /// It locks the thread until a framebuffer is presented.
     pub fn render(&self) -> Result<(), Box<dyn Error>> {
         let frame = self.surface.get_current_texture()?;
         let view = frame.texture.create_view(&TextureViewDescriptor::default());
@@ -249,6 +260,7 @@ impl<'a> Renderer<'a> {
         Ok(())
     }
 
+    /// A method to resize the size of surface.
     pub fn resize(&self, width: u32, height: u32) {
         self.surface.configure(
             &self.device,
@@ -263,9 +275,6 @@ impl<'a> Renderer<'a> {
                 desired_maximum_frame_latency: 2,
             },
         );
-        info!(
-            "Renderer.resize",
-            "surface has been resized: {}x{}.", width, height
-        );
+        info!("Renderer.resize", "surface resized: {}x{}.", width, height);
     }
 }
