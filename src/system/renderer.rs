@@ -1,15 +1,42 @@
 use futures::executor;
-use std::{borrow::Cow, error::Error, sync::Arc};
+use std::{borrow::Cow, error::Error, mem, sync::Arc};
 use wgpu::{
-    Backends, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, FragmentState,
-    Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, MultisampleState, Operations,
-    PipelineLayoutDescriptor, PowerPreference, PrimitiveState, Queue, RenderPassColorAttachment,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
-    ShaderModuleDescriptor, ShaderSource, StoreOp, Surface, SurfaceCapabilities,
-    SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor, VertexState,
+    util::{BufferInitDescriptor, DeviceExt},
+    Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, Device, DeviceDescriptor,
+    Features, FragmentState, IndexFormat, Instance, InstanceDescriptor, Limits, LoadOp,
+    MemoryHints, MultisampleState, Operations, PipelineLayoutDescriptor, PowerPreference,
+    PrimitiveState, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline,
+    RenderPipelineDescriptor, RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, StoreOp,
+    Surface, SurfaceCapabilities, SurfaceConfiguration, TextureFormat, TextureUsages,
+    TextureViewDescriptor, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
+    VertexStepMode,
 };
 use winit::window::Window;
 
+struct Vertex {
+    _position: [f32; 4],
+}
+
+const VERTEX_ATTRIBUTES: &[VertexAttribute] = &[VertexAttribute {
+    format: VertexFormat::Float32x4,
+    offset: 0,
+    shader_location: 0,
+}];
+const VERTEX_DATA: &[Vertex] = &[
+    Vertex {
+        _position: [-0.5, 0.5, 0.0, 1.0],
+    }, // top left
+    Vertex {
+        _position: [-0.5, -0.5, 0.0, 1.0],
+    }, // bottom left
+    Vertex {
+        _position: [0.5, -0.5, 0.0, 1.0],
+    }, // bottom right
+    Vertex {
+        _position: [0.5, 0.5, 0.0, 1.0],
+    }, // top right
+];
+const INDEX_DATA: &[u16] = &[0, 1, 2, 0, 2, 3];
 const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/shader.wgsl"));
 const CLEAR_COLOR: Color = Color {
     r: 0.2,
@@ -18,6 +45,14 @@ const CLEAR_COLOR: Color = Color {
     a: 1.0,
 };
 
+fn slice_to_u8slice<T>(a: &[T]) -> &[u8] {
+    unsafe { std::slice::from_raw_parts(a.as_ptr().cast::<u8>(), mem::size_of::<T>() * a.len()) }
+}
+
+/// A renderer.
+///
+/// It's depends on winit window.
+/// The lifetime `'a` refers to the surface's lifetime, which is the same as the window's.
 pub struct Renderer<'a> {
     surface: Surface<'a>,
     device: Device,
@@ -25,6 +60,8 @@ pub struct Renderer<'a> {
     surface_capabilities: SurfaceCapabilities,
     surface_format: TextureFormat,
     render_pipeline: RenderPipeline,
+    vertex_buffer: Buffer,
+    index_buffer: Buffer,
 }
 
 impl<'a> Renderer<'a> {
@@ -125,6 +162,13 @@ impl<'a> Renderer<'a> {
             push_constant_ranges: &[],
         });
 
+        // create a vertex buffer layout
+        let vertex_buffer_layout = VertexBufferLayout {
+            array_stride: mem::size_of::<Vertex>() as u64,
+            step_mode: VertexStepMode::Vertex,
+            attributes: VERTEX_ATTRIBUTES,
+        };
+
         // create a render pipeline
         let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: None,
@@ -132,8 +176,8 @@ impl<'a> Renderer<'a> {
             vertex: VertexState {
                 module: &shader_module,
                 entry_point: "vs_main",
-                buffers: &[],
                 compilation_options: Default::default(),
+                buffers: &[vertex_buffer_layout],
             },
             fragment: Some(FragmentState {
                 module: &shader_module,
@@ -148,7 +192,20 @@ impl<'a> Renderer<'a> {
             cache: None,
         });
 
+        // create a model
+        let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: slice_to_u8slice(VERTEX_DATA),
+            usage: BufferUsages::VERTEX,
+        });
+        let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: slice_to_u8slice(INDEX_DATA),
+            usage: BufferUsages::INDEX,
+        });
+
         // finish
+        info!("Renderer.new", "a renderer has been created.");
         Self {
             surface,
             device,
@@ -156,6 +213,8 @@ impl<'a> Renderer<'a> {
             surface_capabilities,
             surface_format,
             render_pipeline,
+            vertex_buffer,
+            index_buffer,
         }
     }
 
@@ -181,7 +240,9 @@ impl<'a> Renderer<'a> {
                 occlusion_query_set: None,
             });
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
+            render_pass.draw_indexed(0..INDEX_DATA.len() as u32, 0, 0..1);
         }
         self.queue.submit(Some(command_encoder.finish()));
         frame.present();
