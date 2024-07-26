@@ -1,13 +1,16 @@
 use futures::executor;
-use std::{error::Error, sync::Arc};
+use std::{borrow::Cow, error::Error, sync::Arc};
 use wgpu::{
-    Backends, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, Instance,
-    InstanceDescriptor, Limits, LoadOp, MemoryHints, Operations, PowerPreference, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface,
-    SurfaceConfiguration, TextureUsages, TextureViewDescriptor,
+    Backends, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, FragmentState,
+    Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, MultisampleState, Operations,
+    PipelineLayoutDescriptor, PowerPreference, PrimitiveState, Queue, RenderPassColorAttachment,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
+    ShaderModuleDescriptor, ShaderSource, StoreOp, Surface, SurfaceConfiguration, TextureUsages,
+    TextureViewDescriptor, VertexState,
 };
 use winit::window::Window;
 
+const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/shader.wgsl"));
 const CLEAR_COLOR: Color = Color {
     r: 0.2,
     g: 0.2,
@@ -19,6 +22,7 @@ pub struct Renderer<'a> {
     surface: Surface<'a>,
     device: Device,
     queue: Queue,
+    render_pipeline: RenderPipeline,
 }
 
 impl<'a> Renderer<'a> {
@@ -90,7 +94,7 @@ impl<'a> Renderer<'a> {
             .unwrap_or(surface_capabilities.formats[0]);
         let surface_config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
+            format: surface_format.clone(),
             width: window.inner_size().width,
             height: window.inner_size().height,
             present_mode: surface_capabilities.present_modes[0],
@@ -100,11 +104,49 @@ impl<'a> Renderer<'a> {
         };
         surface.configure(&device, &surface_config);
 
+        // create a shader module
+        let shader_module_descriptor = ShaderModuleDescriptor {
+            label: None,
+            source: ShaderSource::Wgsl(Cow::from(SHADER)),
+        };
+        let shader_module = device.create_shader_module(shader_module_descriptor);
+
+        // create a pipeline layout
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+
+        // create a render pipeline
+        let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &shader_module,
+                entry_point: "vs_main",
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(FragmentState {
+                module: &shader_module,
+                entry_point: "fs_main",
+                compilation_options: Default::default(),
+                targets: &[Some(surface_format.into())],
+            }),
+            primitive: PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
         // finish
         Self {
             surface,
             device,
             queue,
+            render_pipeline,
         }
     }
 
@@ -129,7 +171,9 @@ impl<'a> Renderer<'a> {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             };
-            command_encoder.begin_render_pass(&render_pass_descriptor);
+            let mut render_pass = command_encoder.begin_render_pass(&render_pass_descriptor);
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.draw(0..3, 0..1);
         }
         self.queue.submit(Some(command_encoder.finish()));
         frame.present();
