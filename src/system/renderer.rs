@@ -39,7 +39,11 @@ impl<'a> Renderer<'a> {
         let surface = match instance.create_surface(Arc::clone(&window)) {
             Ok(n) => n,
             Err(e) => {
-                error!("State.new", "failed to create a surface: {}", e.to_string());
+                error!(
+                    "Renderer.new",
+                    "failed to create a surface: {}",
+                    e.to_string()
+                );
                 std::process::exit(1);
             }
         };
@@ -53,12 +57,12 @@ impl<'a> Renderer<'a> {
         let adapter = match executor::block_on(request) {
             Some(n) => n,
             None => {
-                error!("State.new", "failed to get an adapter.");
+                error!("Renderer.new", "failed to get an adapter.");
                 std::process::exit(1);
             }
         };
         info!(
-            "State.new",
+            "Renderer.new",
             "the adapter is selected: {}.",
             adapter.get_info().name
         );
@@ -77,7 +81,7 @@ impl<'a> Renderer<'a> {
             Ok(n) => n,
             Err(e) => {
                 error!(
-                    "State.new",
+                    "Renderer.new",
                     "failed to get a device and a queue: {}",
                     e.to_string()
                 );
