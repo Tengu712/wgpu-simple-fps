@@ -5,8 +5,8 @@ use wgpu::{
     Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, MultisampleState, Operations,
     PipelineLayoutDescriptor, PowerPreference, PrimitiveState, Queue, RenderPassColorAttachment,
     RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
-    ShaderModuleDescriptor, ShaderSource, StoreOp, Surface, SurfaceConfiguration, TextureUsages,
-    TextureViewDescriptor, VertexState,
+    ShaderModuleDescriptor, ShaderSource, StoreOp, Surface, SurfaceCapabilities,
+    SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor, VertexState,
 };
 use winit::window::Window;
 
@@ -22,6 +22,8 @@ pub struct Renderer<'a> {
     surface: Surface<'a>,
     device: Device,
     queue: Queue,
+    surface_capabilities: SurfaceCapabilities,
+    surface_format: TextureFormat,
     render_pipeline: RenderPipeline,
 }
 
@@ -96,7 +98,7 @@ impl<'a> Renderer<'a> {
             &device,
             &SurfaceConfiguration {
                 usage: TextureUsages::RENDER_ATTACHMENT,
-                format: surface_format.clone(),
+                format: surface_format,
                 width: window.inner_size().width,
                 height: window.inner_size().height,
                 present_mode: surface_capabilities.present_modes[0],
@@ -147,6 +149,8 @@ impl<'a> Renderer<'a> {
             surface,
             device,
             queue,
+            surface_capabilities,
+            surface_format,
             render_pipeline,
         }
     }
@@ -178,5 +182,25 @@ impl<'a> Renderer<'a> {
         self.queue.submit(Some(command_encoder.finish()));
         frame.present();
         Ok(())
+    }
+
+    pub fn resize(&self, width: u32, height: u32) {
+        self.surface.configure(
+            &self.device,
+            &SurfaceConfiguration {
+                usage: TextureUsages::RENDER_ATTACHMENT,
+                format: self.surface_format,
+                width,
+                height,
+                present_mode: self.surface_capabilities.present_modes[0],
+                view_formats: Vec::new(),
+                alpha_mode: self.surface_capabilities.alpha_modes[0],
+                desired_maximum_frame_latency: 2,
+            },
+        );
+        info!(
+            "Renderer.resize",
+            "surface has been resized: {}x{}.", width, height
+        );
     }
 }

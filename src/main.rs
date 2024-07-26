@@ -14,6 +14,7 @@ use std::{error::Error, process, sync::Arc};
 use system::renderer::Renderer;
 use winit::{
     application::ApplicationHandler,
+    dpi::PhysicalSize,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Fullscreen, Window, WindowButtons, WindowId},
@@ -68,6 +69,11 @@ impl<'a> ApplicationHandler for Application<'a> {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Destroyed => event_loop.exit(),
+            WindowEvent::Resized(PhysicalSize { width, height }) => {
+                if let Some(renderer) = &self.renderer {
+                    renderer.resize(width, height);
+                }
+            }
             _ => (),
         }
     }
