@@ -28,11 +28,10 @@ pub struct Renderer<'a> {
 impl<'a> Renderer<'a> {
     pub fn new(window: Arc<Window>) -> Self {
         // create an instance
-        let instance_descriptor = InstanceDescriptor {
+        let instance = Instance::new(InstanceDescriptor {
             backends: Backends::all(),
             ..Default::default()
-        };
-        let instance = Instance::new(instance_descriptor);
+        });
 
         // create a surface
         let surface = match instance.create_surface(Arc::clone(&window)) {
@@ -44,12 +43,11 @@ impl<'a> Renderer<'a> {
         };
 
         // get an adapter
-        let request_adapter_option = RequestAdapterOptions {
+        let request = instance.request_adapter(&RequestAdapterOptions {
             power_preference: PowerPreference::default(),
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
-        };
-        let request = instance.request_adapter(&request_adapter_option);
+        });
         let adapter = match executor::block_on(request) {
             Some(n) => n,
             None => {
@@ -64,13 +62,15 @@ impl<'a> Renderer<'a> {
         );
 
         // get a device and a queue
-        let device_descriptor = DeviceDescriptor {
-            label: None,
-            required_features: Features::empty(),
-            required_limits: Limits::default(),
-            memory_hints: MemoryHints::MemoryUsage,
-        };
-        let request = adapter.request_device(&device_descriptor, None);
+        let request = adapter.request_device(
+            &DeviceDescriptor {
+                label: None,
+                required_features: Features::empty(),
+                required_limits: Limits::default(),
+                memory_hints: MemoryHints::MemoryUsage,
+            },
+            None,
+        );
         let (device, queue) = match executor::block_on(request) {
             Ok(n) => n,
             Err(e) => {
@@ -92,24 +92,25 @@ impl<'a> Renderer<'a> {
             .filter(|f| f.is_srgb())
             .next()
             .unwrap_or(surface_capabilities.formats[0]);
-        let surface_config = SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format.clone(),
-            width: window.inner_size().width,
-            height: window.inner_size().height,
-            present_mode: surface_capabilities.present_modes[0],
-            view_formats: Vec::new(),
-            alpha_mode: surface_capabilities.alpha_modes[0],
-            desired_maximum_frame_latency: 2,
-        };
-        surface.configure(&device, &surface_config);
+        surface.configure(
+            &device,
+            &SurfaceConfiguration {
+                usage: TextureUsages::RENDER_ATTACHMENT,
+                format: surface_format.clone(),
+                width: window.inner_size().width,
+                height: window.inner_size().height,
+                present_mode: surface_capabilities.present_modes[0],
+                view_formats: Vec::new(),
+                alpha_mode: surface_capabilities.alpha_modes[0],
+                desired_maximum_frame_latency: 2,
+            },
+        );
 
         // create a shader module
-        let shader_module_descriptor = ShaderModuleDescriptor {
+        let shader_module = device.create_shader_module(ShaderModuleDescriptor {
             label: None,
             source: ShaderSource::Wgsl(Cow::from(SHADER)),
-        };
-        let shader_module = device.create_shader_module(shader_module_descriptor);
+        });
 
         // create a pipeline layout
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
@@ -157,7 +158,7 @@ impl<'a> Renderer<'a> {
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
         {
-            let render_pass_descriptor = RenderPassDescriptor {
+            let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &view,
@@ -170,8 +171,7 @@ impl<'a> Renderer<'a> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            };
-            let mut render_pass = command_encoder.begin_render_pass(&render_pass_descriptor);
+            });
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.draw(0..3, 0..1);
         }
