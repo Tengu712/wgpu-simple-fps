@@ -1,17 +1,25 @@
 use futures::executor;
+use glam::{Mat4, Vec3};
 use std::{borrow::Cow, error::Error, mem, sync::Arc};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, Device, DeviceDescriptor,
-    Features, FragmentState, IndexFormat, Instance, InstanceDescriptor, Limits, LoadOp,
-    MemoryHints, MultisampleState, Operations, PipelineLayoutDescriptor, PowerPreference,
-    PrimitiveState, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, StoreOp,
-    Surface, SurfaceCapabilities, SurfaceConfiguration, TextureFormat, TextureUsages,
-    TextureViewDescriptor, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
-    VertexStepMode,
+    Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferSize, BufferUsages, Color,
+    CommandEncoderDescriptor, Device, DeviceDescriptor, Features, FragmentState, IndexFormat,
+    Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, MultisampleState, Operations,
+    PipelineLayoutDescriptor, PowerPreference, PrimitiveState, Queue, RenderPassColorAttachment,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
+    ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, Surface, SurfaceCapabilities,
+    SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor, VertexAttribute,
+    VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
 use winit::window::Window;
+
+struct Uniforms {
+    _projection_matrix: Mat4,
+    _view_matrix: Mat4,
+    _world_matrix: Mat4,
+}
 
 struct Vertex {
     _position: [f32; 4],
@@ -60,6 +68,7 @@ pub struct Renderer<'a> {
     surface_capabilities: SurfaceCapabilities,
     surface_format: TextureFormat,
     render_pipeline: RenderPipeline,
+    bind_group: BindGroup,
     vertex_buffer: Buffer,
     index_buffer: Buffer,
 }
@@ -163,10 +172,25 @@ impl<'a> Renderer<'a> {
             source: ShaderSource::Wgsl(Cow::from(SHADER)),
         });
 
+        // create a bind group layout
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: BufferSize::new(mem::size_of::<Uniforms>() as u64),
+                },
+                count: None,
+            }],
+        });
+
         // create a pipeline layout
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[],
+            bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -200,6 +224,37 @@ impl<'a> Renderer<'a> {
             cache: None,
         });
 
+        // create a uniform buffer
+        let uniforms = Uniforms {
+            _projection_matrix: Mat4::perspective_rh(
+                45.0f32.to_radians(),
+                window.inner_size().width as f32 / window.inner_size().height as f32,
+                0.0,
+                1000.0,
+            ),
+            _view_matrix: Mat4::look_to_rh(
+                Vec3::new(0.0, 0.0, -10.0),
+                Vec3::new(0.0, 0.0, 1.0),
+                Vec3::new(0.0, 1.0, 0.0),
+            ),
+            _world_matrix: Mat4::IDENTITY,
+        };
+        let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: slice_to_u8slice(&[uniforms]),
+            usage: BufferUsages::UNIFORM,
+        });
+
+        // create a bind group
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+        });
+
         // create a model
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
@@ -221,6 +276,7 @@ impl<'a> Renderer<'a> {
             surface_capabilities,
             surface_format,
             render_pipeline,
+            bind_group,
             vertex_buffer,
             index_buffer,
         }
@@ -251,6 +307,7 @@ impl<'a> Renderer<'a> {
                 occlusion_query_set: None,
             });
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
             render_pass.draw_indexed(0..INDEX_DATA.len() as u32, 0, 0..1);
@@ -275,6 +332,7 @@ impl<'a> Renderer<'a> {
                 desired_maximum_frame_latency: 2,
             },
         );
+        // TODO: update projection matrix
         info!("Renderer.resize", "surface resized: {}x{}.", width, height);
     }
 }
