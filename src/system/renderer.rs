@@ -1,23 +1,19 @@
 mod model;
-mod uniform;
+mod world;
 
 use crate::util::camera::CameraController;
 use futures::executor;
-use model::SquareModel;
-use std::{borrow::Cow, error::Error, sync::Arc};
-use uniform::Group0;
+use std::{error::Error, sync::Arc};
 use wgpu::{
     Backends, Color, CommandEncoder, CommandEncoderDescriptor, Device, DeviceDescriptor, Features,
-    FragmentState, IndexFormat, Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints,
-    MultisampleState, Operations, PipelineLayoutDescriptor, PowerPreference, PrimitiveState, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
-    RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, StoreOp, Surface,
+    Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, Operations, PowerPreference, Queue,
+    RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface,
     SurfaceCapabilities, SurfaceConfiguration, TextureFormat, TextureUsages, TextureView,
-    TextureViewDescriptor, VertexState,
+    TextureViewDescriptor,
 };
 use winit::window::Window;
+use world::WorldPipeline;
 
-const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/shader.wgsl"));
 const CLEAR_COLOR: Color = Color {
     r: 0.2,
     g: 0.2,
@@ -40,9 +36,7 @@ pub struct Renderer<'a> {
     queue: Queue,
     surface_capabilities: SurfaceCapabilities,
     surface_format: TextureFormat,
-    render_pipeline: RenderPipeline,
-    group0: Group0,
-    model: SquareModel,
+    world_pipeline: WorldPipeline,
 }
 
 impl<'a> Renderer<'a> {
@@ -138,48 +132,8 @@ impl<'a> Renderer<'a> {
             },
         );
 
-        // create a shader module
-        let shader_module = device.create_shader_module(ShaderModuleDescriptor {
-            label: None,
-            source: ShaderSource::Wgsl(Cow::from(SHADER)),
-        });
-
-        // create a pipeline layout
-        let bind_group_layout = uniform::create_bind_group_layout(&device);
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        // create a render pipeline
-        let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &shader_module,
-                entry_point: "vs_main",
-                compilation_options: Default::default(),
-                buffers: &[model::VERTEX_BUFFER_LAYOUT],
-            },
-            fragment: Some(FragmentState {
-                module: &shader_module,
-                entry_point: "fs_main",
-                compilation_options: Default::default(),
-                targets: &[Some(surface_format.into())],
-            }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
-
-        // create a bind group, @group(0)
-        let group0 = Group0::new(&device, &bind_group_layout);
-
-        // create a model
-        let model = SquareModel::new(&device);
+        // create render pipelines
+        let world_pipeline = WorldPipeline::new(&device, surface_format.into());
 
         // finish
         info!("Renderer.new", "renderer created.");
@@ -189,9 +143,7 @@ impl<'a> Renderer<'a> {
             queue,
             surface_capabilities,
             surface_format,
-            render_pipeline,
-            group0,
-            model,
+            world_pipeline,
         }
     }
 
@@ -216,6 +168,8 @@ impl<'a> Renderer<'a> {
     /// A method to render entities.
     ///
     /// It locks the thread until a framebuffer is presented.
+    ///
+    /// The render pipeline of world.wgsl is attached first.
     pub fn render(&self, render_requests: Vec<RenderRequest>) -> Result<(), Box<dyn Error>> {
         let frame = self.surface.get_current_texture()?;
         let view = frame.texture.create_view(&TextureViewDescriptor::default());
@@ -250,19 +204,16 @@ impl<'a> Renderer<'a> {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
-        render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &self.group0.bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.model.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.model.index_buffer.slice(..), IndexFormat::Uint16);
+        self.world_pipeline.attach(&mut render_pass);
 
         for request in render_requests {
             match request {
                 RenderRequest::UpdateCamera(camera_controller) => self
-                    .group0
+                    .world_pipeline
                     .enqueue_update_camera(&self.queue, &camera_controller),
             }
         }
 
-        render_pass.draw_indexed(0..self.model.index_count as u32, 0, 0..1);
+        self.world_pipeline.draw(&mut render_pass);
     }
 }
