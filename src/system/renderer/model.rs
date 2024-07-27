@@ -1,13 +1,10 @@
+use crate::util::memory;
 use std::mem;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     Buffer, BufferUsages, Device, VertexAttribute, VertexBufferLayout, VertexFormat,
     VertexStepMode,
 };
-
-fn slice_to_u8slice<T>(a: &[T]) -> &[u8] {
-    unsafe { std::slice::from_raw_parts(a.as_ptr().cast::<u8>(), mem::size_of::<T>() * a.len()) }
-}
 
 struct Vertex {
     _position: [f32; 4],
@@ -51,12 +48,12 @@ impl SquareModel {
 
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: slice_to_u8slice(VERTEX_DATA),
+            contents: memory::slice_to_u8slice(VERTEX_DATA),
             usage: BufferUsages::VERTEX,
         });
         let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: slice_to_u8slice(INDEX_DATA),
+            contents: memory::slice_to_u8slice(INDEX_DATA),
             usage: BufferUsages::INDEX,
         });
 

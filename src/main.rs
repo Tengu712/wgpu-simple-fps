@@ -9,6 +9,7 @@
 #[macro_use]
 mod log;
 mod system;
+mod util;
 
 use std::{error::Error, process, sync::Arc};
 use system::renderer::Renderer;
@@ -49,9 +50,7 @@ impl<'a> ApplicationHandler for Application<'a> {
                 std::process::exit(1);
             }
         };
-        let enabled_buttons_bits = WindowButtons::CLOSE.bits() | WindowButtons::MINIMIZE.bits();
-        let enabled_buttons = WindowButtons::from_bits(enabled_buttons_bits).unwrap();
-        window.set_enabled_buttons(enabled_buttons);
+        window.set_enabled_buttons(WindowButtons::CLOSE | WindowButtons::MINIMIZE);
         info!("Application.resumed", "window created.");
 
         // create an arc of the window
@@ -71,7 +70,7 @@ impl<'a> ApplicationHandler for Application<'a> {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Destroyed => event_loop.exit(),
             WindowEvent::Resized(PhysicalSize { width, height }) => {
-                if let Some(renderer) = &self.renderer {
+                if let Some(renderer) = &mut self.renderer {
                     renderer.resize(width, height);
                 }
             }

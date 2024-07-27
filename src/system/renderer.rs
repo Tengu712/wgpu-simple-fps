@@ -1,6 +1,7 @@
 mod model;
 mod uniform;
 
+use crate::util::camera::CameraController;
 use futures::executor;
 use model::SquareModel;
 use std::{borrow::Cow, error::Error, sync::Arc};
@@ -37,6 +38,7 @@ pub struct Renderer<'a> {
     render_pipeline: RenderPipeline,
     group0: Group0,
     model: SquareModel,
+    camera_controller: CameraController,
 }
 
 impl<'a> Renderer<'a> {
@@ -170,15 +172,17 @@ impl<'a> Renderer<'a> {
         });
 
         // create a bind group, @group(0)
-        let group0 = Group0::new(
-            &device,
-            &bind_group_layout,
-            window.inner_size().width as f32,
-            window.inner_size().height as f32,
-        );
+        let group0 = Group0::new(&device, &bind_group_layout);
 
         // create a model
         let model = SquareModel::new(&device);
+
+        // create a camera controller
+        let mut camera_controller = CameraController::default();
+        camera_controller.width = window.inner_size().width as f32;
+        camera_controller.height = window.inner_size().height as f32;
+        camera_controller.position.z = -10.0;
+        group0.enqueue_update_camera(&queue, &camera_controller);
 
         // finish
         info!("Renderer.new", "renderer created.");
@@ -191,6 +195,7 @@ impl<'a> Renderer<'a> {
             render_pipeline,
             group0,
             model,
+            camera_controller,
         }
     }
 
@@ -198,8 +203,11 @@ impl<'a> Renderer<'a> {
     ///
     /// It locks the thread until a framebuffer is presented.
     pub fn render(&self) -> Result<(), Box<dyn Error>> {
+        // prepare
         let frame = self.surface.get_current_texture()?;
         let view = frame.texture.create_view(&TextureViewDescriptor::default());
+
+        // write commands
         let mut command_encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
@@ -224,13 +232,16 @@ impl<'a> Renderer<'a> {
             render_pass.set_index_buffer(self.model.index_buffer.slice(..), IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.model.index_count as u32, 0, 0..1);
         }
-        self.queue.submit(Some(command_encoder.finish()));
+        let command_buffer = command_encoder.finish();
+
+        // finish
+        self.queue.submit(Some(command_buffer));
         frame.present();
         Ok(())
     }
 
     /// A method to resize the size of surface.
-    pub fn resize(&self, width: u32, height: u32) {
+    pub fn resize(&mut self, width: u32, height: u32) {
         self.surface.configure(
             &self.device,
             &SurfaceConfiguration {
@@ -244,7 +255,10 @@ impl<'a> Renderer<'a> {
                 desired_maximum_frame_latency: 2,
             },
         );
-        // TODO: update projection matrix
+        self.camera_controller.width = width as f32;
+        self.camera_controller.height = height as f32;
+        self.group0
+            .enqueue_update_camera(&self.queue, &self.camera_controller);
         info!("Renderer.resize", "surface resized: {}x{}.", width, height);
     }
 }

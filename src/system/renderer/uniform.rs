@@ -1,15 +1,12 @@
-use glam::{Mat4, Vec3};
+use crate::util::{camera::CameraController, memory};
+use glam::Mat4;
 use std::mem;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferSize, BufferUsages, Device,
-    ShaderStages,
+    Queue, ShaderStages,
 };
-
-fn anything_to_u8slice<T>(a: &T) -> &[u8] {
-    unsafe { std::slice::from_raw_parts((a as *const T).cast::<u8>(), mem::size_of::<T>()) }
-}
 
 struct Camera {
     _projection_matrix: Mat4,
@@ -41,31 +38,17 @@ pub(super) struct Group0 {
 }
 
 impl Group0 {
-    pub(super) fn new(
-        device: &Device,
-        bind_group_layout: &BindGroupLayout,
-        width: f32,
-        height: f32,
-    ) -> Self {
+    pub(super) fn new(device: &Device, bind_group_layout: &BindGroupLayout) -> Self {
         // create a camera uniform buffer
-        let camera = Camera {
-            _projection_matrix: Mat4::perspective_rh(
-                45.0f32.to_radians(),
-                width / height,
-                0.0,
-                1000.0,
-            ),
-            _view_matrix: Mat4::look_to_rh(
-                Vec3::new(0.0, 0.0, -10.0),
-                Vec3::new(0.0, 0.0, 1.0),
-                Vec3::new(0.0, 1.0, 0.0),
-            ),
+        const CAMERA: Camera = Camera {
+            _projection_matrix: Mat4::IDENTITY,
+            _view_matrix: Mat4::IDENTITY,
             _world_matrix: Mat4::IDENTITY,
         };
         let camera_uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: anything_to_u8slice(&camera),
-            usage: BufferUsages::UNIFORM,
+            contents: memory::anything_to_u8slice(&CAMERA),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
         // create a bind group
@@ -83,5 +66,31 @@ impl Group0 {
             camera_uniform_buffer,
             bind_group,
         }
+    }
+
+    pub(super) fn enqueue_update_camera(
+        &self,
+        queue: &Queue,
+        camera_controller: &CameraController,
+    ) {
+        let camera = Camera {
+            _projection_matrix: Mat4::perspective_rh(
+                camera_controller.pov,
+                camera_controller.width / camera_controller.height,
+                0.0,
+                1000.0,
+            ),
+            _view_matrix: Mat4::look_to_rh(
+                camera_controller.position,
+                camera_controller.direction,
+                camera_controller.up,
+            ),
+            _world_matrix: Mat4::IDENTITY,
+        };
+        queue.write_buffer(
+            &self.camera_uniform_buffer,
+            0,
+            memory::anything_to_u8slice(&camera),
+        );
     }
 }
