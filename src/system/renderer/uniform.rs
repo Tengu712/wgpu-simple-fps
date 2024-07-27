@@ -74,13 +74,13 @@ impl Group0 {
         camera_controller: &CameraController,
     ) {
         let camera = Camera {
-            _projection_matrix: Mat4::perspective_rh(
+            _projection_matrix: Mat4::perspective_lh(
                 camera_controller.pov,
                 camera_controller.width / camera_controller.height,
                 0.0,
                 1000.0,
             ),
-            _view_matrix: Mat4::look_to_rh(
+            _view_matrix: Mat4::look_to_lh(
                 camera_controller.position,
                 camera_controller.direction,
                 camera_controller.up,

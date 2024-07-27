@@ -18,7 +18,7 @@ impl Default for CameraController {
             height: 1.0,
             position: Vec3::new(0.0, 0.0, 0.0),
             direction: Vec3::new(0.0, 0.0, 1.0),
-            up: Vec3::new(0.0, -1.0, 0.0),
+            up: Vec3::new(0.0, 1.0, 0.0),
         }
     }
 }
