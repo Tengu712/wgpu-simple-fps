@@ -1,5 +1,6 @@
 use glam::Vec3;
 
+#[derive(Clone)]
 pub struct CameraController {
     pub pov: f32,
     pub width: f32,
@@ -17,7 +18,7 @@ impl Default for CameraController {
             height: 1.0,
             position: Vec3::new(0.0, 0.0, 0.0),
             direction: Vec3::new(0.0, 0.0, 1.0),
-            up: Vec3::new(0.0, 1.0, 0.0),
+            up: Vec3::new(0.0, -1.0, 0.0),
         }
     }
 }

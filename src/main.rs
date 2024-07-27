@@ -8,9 +8,11 @@
 
 #[macro_use]
 mod log;
+mod game;
 mod system;
 mod util;
 
+use game::Game;
 use std::{error::Error, process, sync::Arc};
 use system::{input::InputManager, renderer::Renderer};
 use winit::{
@@ -26,6 +28,7 @@ struct Application<'a> {
     window: Option<Arc<Window>>,
     renderer: Option<Renderer<'a>>,
     input_manager: Option<InputManager>,
+    game: Option<Game>,
 }
 
 impl<'a> ApplicationHandler for Application<'a> {
@@ -63,53 +66,77 @@ impl<'a> ApplicationHandler for Application<'a> {
         // create an input manager
         let input_manager = InputManager::new();
 
+        // create a game
+        let game = Game::new(
+            window.inner_size().width as f32,
+            window.inner_size().height as f32,
+        );
+
         // finish
         info!("Application.resumed", "initialization done.");
         self.window = Some(window);
         self.renderer = Some(renderer);
         self.input_manager = Some(input_manager);
+        self.game = Some(game);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
+        if self.window.is_none() {
+            warn!("Application.window_event", "window is none.");
+            return;
+        }
+
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Destroyed => event_loop.exit(),
             WindowEvent::Resized(PhysicalSize { width, height }) => {
-                if let Some(renderer) = &mut self.renderer {
-                    renderer.resize(width, height);
-                }
+                self.renderer.as_ref().unwrap().resize(width, height);
+                self.game
+                    .as_mut()
+                    .unwrap()
+                    .resize(width as f32, height as f32);
             }
             WindowEvent::KeyboardInput {
                 device_id: _,
                 event,
                 is_synthetic: _,
             } => {
-                if let Some(input_manager) = &mut self.input_manager {
-                    input_manager.update_key_state(event);
-                }
+                self.input_manager.as_mut().unwrap().update_key_state(event);
             }
             WindowEvent::MouseInput {
                 device_id: _,
                 state,
                 button,
             } => {
-                if let Some(input_manager) = &mut self.input_manager {
-                    input_manager.update_mouse_state(button, state);
-                }
+                self.input_manager
+                    .as_mut()
+                    .unwrap()
+                    .update_mouse_state(button, state);
             }
             _ => (),
         }
     }
 
     fn about_to_wait(&mut self, _: &ActiveEventLoop) {
-        if let Some(renderer) = &self.renderer {
-            if let Err(e) = renderer.render() {
-                warn!(
-                    "Application.about_to_wait",
-                    "failed to render: {}",
-                    e.to_string()
-                );
-            }
+        if self.window.is_none() {
+            warn!("Application.about_to_wait", "window is none.");
+            return;
+        }
+
+        let input_states = self.input_manager.as_ref().unwrap().get();
+        let mut render_requests = Vec::new();
+
+        self.game
+            .as_mut()
+            .unwrap()
+            .update(input_states, &mut render_requests);
+
+        if let Err(e) = self.renderer.as_ref().unwrap().render(render_requests) {
+            warn!(
+                "Application.about_to_wait",
+                "failed to render: {}",
+                e.to_string()
+            );
         }
     }
 }

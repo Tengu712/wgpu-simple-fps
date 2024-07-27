@@ -7,13 +7,13 @@ use model::SquareModel;
 use std::{borrow::Cow, error::Error, sync::Arc};
 use uniform::Group0;
 use wgpu::{
-    Backends, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, FragmentState,
-    IndexFormat, Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, MultisampleState,
-    Operations, PipelineLayoutDescriptor, PowerPreference, PrimitiveState, Queue,
+    Backends, Color, CommandEncoder, CommandEncoderDescriptor, Device, DeviceDescriptor, Features,
+    FragmentState, IndexFormat, Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints,
+    MultisampleState, Operations, PipelineLayoutDescriptor, PowerPreference, PrimitiveState, Queue,
     RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
     RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, StoreOp, Surface,
-    SurfaceCapabilities, SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor,
-    VertexState,
+    SurfaceCapabilities, SurfaceConfiguration, TextureFormat, TextureUsages, TextureView,
+    TextureViewDescriptor, VertexState,
 };
 use winit::window::Window;
 
@@ -24,6 +24,11 @@ const CLEAR_COLOR: Color = Color {
     b: 0.2,
     a: 1.0,
 };
+
+/// A enum for enumerating requests for a renderer.
+pub enum RenderRequest {
+    UpdateCamera(CameraController),
+}
 
 /// A renderer on WebGPU.
 ///
@@ -38,7 +43,6 @@ pub struct Renderer<'a> {
     render_pipeline: RenderPipeline,
     group0: Group0,
     model: SquareModel,
-    camera_controller: CameraController,
 }
 
 impl<'a> Renderer<'a> {
@@ -177,13 +181,6 @@ impl<'a> Renderer<'a> {
         // create a model
         let model = SquareModel::new(&device);
 
-        // create a camera controller
-        let mut camera_controller = CameraController::default();
-        camera_controller.width = window.inner_size().width as f32;
-        camera_controller.height = window.inner_size().height as f32;
-        camera_controller.position.z = -10.0;
-        group0.enqueue_update_camera(&queue, &camera_controller);
-
         // finish
         info!("Renderer.new", "renderer created.");
         Self {
@@ -195,53 +192,11 @@ impl<'a> Renderer<'a> {
             render_pipeline,
             group0,
             model,
-            camera_controller,
         }
-    }
-
-    /// A method to render entities.
-    ///
-    /// It locks the thread until a framebuffer is presented.
-    pub fn render(&self) -> Result<(), Box<dyn Error>> {
-        // prepare
-        let frame = self.surface.get_current_texture()?;
-        let view = frame.texture.create_view(&TextureViewDescriptor::default());
-
-        // write commands
-        let mut command_encoder = self
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None });
-        {
-            let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(CLEAR_COLOR),
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.group0.bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.model.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.model.index_buffer.slice(..), IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.model.index_count as u32, 0, 0..1);
-        }
-        let command_buffer = command_encoder.finish();
-
-        // finish
-        self.queue.submit(Some(command_buffer));
-        frame.present();
-        Ok(())
     }
 
     /// A method to resize the size of surface.
-    pub fn resize(&mut self, width: u32, height: u32) {
+    pub fn resize(&self, width: u32, height: u32) {
         self.surface.configure(
             &self.device,
             &SurfaceConfiguration {
@@ -255,10 +210,59 @@ impl<'a> Renderer<'a> {
                 desired_maximum_frame_latency: 2,
             },
         );
-        self.camera_controller.width = width as f32;
-        self.camera_controller.height = height as f32;
-        self.group0
-            .enqueue_update_camera(&self.queue, &self.camera_controller);
         info!("Renderer.resize", "surface resized: {}x{}.", width, height);
+    }
+
+    /// A method to render entities.
+    ///
+    /// It locks the thread until a framebuffer is presented.
+    pub fn render(&self, render_requests: Vec<RenderRequest>) -> Result<(), Box<dyn Error>> {
+        let frame = self.surface.get_current_texture()?;
+        let view = frame.texture.create_view(&TextureViewDescriptor::default());
+        let mut command_encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+
+        self.do_requests(render_requests, &mut command_encoder, &view);
+
+        self.queue.submit(Some(command_encoder.finish()));
+        frame.present();
+        Ok(())
+    }
+
+    fn do_requests(
+        &self,
+        render_requests: Vec<RenderRequest>,
+        command_encoder: &mut CommandEncoder,
+        render_target_view: &TextureView,
+    ) {
+        let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: render_target_view,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(CLEAR_COLOR),
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_bind_group(0, &self.group0.bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.model.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.model.index_buffer.slice(..), IndexFormat::Uint16);
+
+        for request in render_requests {
+            match request {
+                RenderRequest::UpdateCamera(camera_controller) => self
+                    .group0
+                    .enqueue_update_camera(&self.queue, &camera_controller),
+            }
+        }
+
+        render_pass.draw_indexed(0..self.model.index_count as u32, 0, 0..1);
     }
 }

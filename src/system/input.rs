@@ -4,60 +4,75 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
 };
 
-/// An enum for enumerating all the inputs used in this game.
+/// An enum for enumerating all the key and mouse pressing inputs used in this game.
 #[derive(PartialEq, Eq, Hash)]
-pub enum Input {
-    W,
-    A,
-    S,
-    D,
-    LeftButton,
+pub enum PressingInput {
+    KeyW,
+    KeyA,
+    KeyS,
+    KeyD,
+    MouseLeft,
+}
+
+/// A struct that encapsulates the input states.
+pub struct InputStates {
+    pressing_input_states: HashMap<PressingInput, bool>,
+}
+
+impl InputStates {
+    pub fn get_pressing_input_state(&self, pressing_input: &PressingInput) -> bool {
+        self.pressing_input_states
+            .get(pressing_input)
+            .unwrap_or(&false)
+            .clone()
+    }
 }
 
 /// An input manager.
-///
-/// It manages key and mouse input states as `bool`.
-/// Call `get_states()` to get one of the state.
 pub struct InputManager {
-    states: HashMap<Input, bool>,
+    states: InputStates,
 }
 
 impl InputManager {
     pub fn new() -> Self {
-        let mut states = HashMap::new();
-        states.insert(Input::W, false);
-        states.insert(Input::A, false);
-        states.insert(Input::S, false);
-        states.insert(Input::D, false);
-        states.insert(Input::LeftButton, false);
+        let mut pressing_input_states = HashMap::new();
+        pressing_input_states.insert(PressingInput::KeyW, false);
+        pressing_input_states.insert(PressingInput::KeyA, false);
+        pressing_input_states.insert(PressingInput::KeyS, false);
+        pressing_input_states.insert(PressingInput::KeyD, false);
+        pressing_input_states.insert(PressingInput::MouseLeft, false);
         info!("InputManager.new", "input manager created.");
-        Self { states }
+        Self {
+            states: InputStates {
+                pressing_input_states,
+            },
+        }
+    }
+
+    pub fn get(&self) -> &InputStates {
+        &self.states
     }
 
     pub fn update_key_state(&mut self, event: KeyEvent) {
         let input = match event.physical_key {
-            PhysicalKey::Code(KeyCode::KeyW) => Input::W,
-            PhysicalKey::Code(KeyCode::KeyA) => Input::A,
-            PhysicalKey::Code(KeyCode::KeyS) => Input::S,
-            PhysicalKey::Code(KeyCode::KeyD) => Input::D,
+            PhysicalKey::Code(KeyCode::KeyW) => PressingInput::KeyW,
+            PhysicalKey::Code(KeyCode::KeyA) => PressingInput::KeyA,
+            PhysicalKey::Code(KeyCode::KeyS) => PressingInput::KeyS,
+            PhysicalKey::Code(KeyCode::KeyD) => PressingInput::KeyD,
             _ => return,
         };
-        self.states.insert(input, event.state.is_pressed());
+        self.states
+            .pressing_input_states
+            .insert(input, event.state.is_pressed());
     }
 
     pub fn update_mouse_state(&mut self, button: MouseButton, state: ElementState) {
         let input = match button {
-            MouseButton::Left => Input::LeftButton,
+            MouseButton::Left => PressingInput::MouseLeft,
             _ => return,
         };
-        self.states.insert(input, state.is_pressed());
-    }
-
-    pub fn get_state(&self, input: &Input) -> bool {
-        if let Some(n) = self.states.get(input) {
-            n.clone()
-        } else {
-            false
-        }
+        self.states
+            .pressing_input_states
+            .insert(input, state.is_pressed());
     }
 }
