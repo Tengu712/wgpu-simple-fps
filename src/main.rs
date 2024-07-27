@@ -12,7 +12,7 @@ mod system;
 mod util;
 
 use std::{error::Error, process, sync::Arc};
-use system::renderer::Renderer;
+use system::{input::InputManager, renderer::Renderer};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -25,6 +25,7 @@ use winit::{
 struct Application<'a> {
     window: Option<Arc<Window>>,
     renderer: Option<Renderer<'a>>,
+    input_manager: Option<InputManager>,
 }
 
 impl<'a> ApplicationHandler for Application<'a> {
@@ -59,10 +60,14 @@ impl<'a> ApplicationHandler for Application<'a> {
         // create a renderer
         let renderer = Renderer::new(window.clone());
 
+        // create an input manager
+        let input_manager = InputManager::new();
+
         // finish
         info!("Application.resumed", "initialization done.");
         self.window = Some(window);
         self.renderer = Some(renderer);
+        self.input_manager = Some(input_manager);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
@@ -72,6 +77,24 @@ impl<'a> ApplicationHandler for Application<'a> {
             WindowEvent::Resized(PhysicalSize { width, height }) => {
                 if let Some(renderer) = &mut self.renderer {
                     renderer.resize(width, height);
+                }
+            }
+            WindowEvent::KeyboardInput {
+                device_id: _,
+                event,
+                is_synthetic: _,
+            } => {
+                if let Some(input_manager) = &mut self.input_manager {
+                    input_manager.update_key_state(event);
+                }
+            }
+            WindowEvent::MouseInput {
+                device_id: _,
+                state,
+                button,
+            } => {
+                if let Some(input_manager) = &mut self.input_manager {
+                    input_manager.update_mouse_state(button, state);
                 }
             }
             _ => (),
