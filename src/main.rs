@@ -90,7 +90,7 @@ impl<'a> ApplicationHandler for Application<'a> {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Destroyed => event_loop.exit(),
             WindowEvent::Resized(PhysicalSize { width, height }) => {
-                self.renderer.as_ref().unwrap().resize(width, height);
+                self.renderer.as_mut().unwrap().resize(width, height);
                 self.game
                     .as_mut()
                     .unwrap()

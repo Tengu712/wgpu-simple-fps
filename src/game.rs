@@ -38,12 +38,12 @@ impl Game {
         render_requests.push(RenderRequest::UpdateCamera(self.camera_controller.clone()));
         let mut instance_controllers = Vec::new();
         let mut instance = InstanceController::default();
-        instance.position.x = 1.0;
-        instance.position.z = 10.0;
-        instance_controllers.push(instance);
-        let mut instance = InstanceController::default();
         instance.position.x = -1.0;
         instance.position.z = 5.0;
+        instance_controllers.push(instance);
+        let mut instance = InstanceController::default();
+        instance.position.x = 1.0;
+        instance.position.z = 10.0;
         instance_controllers.push(instance);
         render_requests.push(RenderRequest::Draw(instance_controllers));
     }

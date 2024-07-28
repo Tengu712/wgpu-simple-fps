@@ -5,21 +5,13 @@ use crate::util::{camera::CameraController, instance::InstanceController};
 use futures::executor;
 use std::{error::Error, sync::Arc};
 use wgpu::{
-    Backends, Color, CommandEncoder, CommandEncoderDescriptor, Device, DeviceDescriptor, Features,
-    Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, Operations, PowerPreference, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface,
-    SurfaceCapabilities, SurfaceConfiguration, TextureFormat, TextureUsages, TextureView,
-    TextureViewDescriptor,
+    Backends, CommandEncoder, CommandEncoderDescriptor, Device, DeviceDescriptor, Features,
+    Instance, InstanceDescriptor, Limits, MemoryHints, PowerPreference, Queue,
+    RequestAdapterOptions, Surface, SurfaceCapabilities, SurfaceConfiguration, TextureFormat,
+    TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
 use world::WorldPipeline;
-
-const CLEAR_COLOR: Color = Color {
-    r: 0.0,
-    g: 0.0,
-    b: 0.0,
-    a: 1.0,
-};
 
 /// A enum for enumerating requests for a renderer.
 pub enum RenderRequest {
@@ -134,7 +126,12 @@ impl<'a> Renderer<'a> {
         );
 
         // create render pipelines
-        let world_pipeline = WorldPipeline::new(&device, surface_format.into());
+        let world_pipeline = WorldPipeline::new(
+            &device,
+            surface_format.into(),
+            window.inner_size().width,
+            window.inner_size().height,
+        );
 
         // finish
         info!("Renderer.new", "renderer created.");
@@ -148,8 +145,8 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    /// A method to resize the size of surface.
-    pub fn resize(&self, width: u32, height: u32) {
+    /// A method to resize the size of textures.
+    pub fn resize(&mut self, width: u32, height: u32) {
         self.surface.configure(
             &self.device,
             &SurfaceConfiguration {
@@ -163,7 +160,8 @@ impl<'a> Renderer<'a> {
                 desired_maximum_frame_latency: 2,
             },
         );
-        info!("Renderer.resize", "surface resized: {}x{}.", width, height);
+        self.world_pipeline.resize(&self.device, width, height);
+        info!("Renderer.resize", "textures resized: {}x{}.", width, height);
     }
 
     /// A method to render entities.
@@ -191,21 +189,9 @@ impl<'a> Renderer<'a> {
         command_encoder: &mut CommandEncoder,
         render_target_view: &TextureView,
     ) {
-        let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: render_target_view,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(CLEAR_COLOR),
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-        self.world_pipeline.attach(&mut render_pass);
+        let mut render_pass = self
+            .world_pipeline
+            .begin(command_encoder, render_target_view);
 
         for request in render_requests {
             match request {

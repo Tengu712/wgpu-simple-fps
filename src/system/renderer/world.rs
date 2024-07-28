@@ -7,11 +7,15 @@ use std::{borrow::Cow, mem};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferSize, BufferUsages,
-    ColorTargetState, Device, FragmentState, IndexFormat, MultisampleState,
-    PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPipeline,
-    RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, ShaderStages, VertexAttribute,
-    VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferSize, BufferUsages, Color,
+    ColorTargetState, CommandEncoder, CompareFunction, DepthBiasState, DepthStencilState, Device,
+    Extent3d, FragmentState, IndexFormat, LoadOp, MultisampleState, Operations,
+    PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPassColorAttachment,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline,
+    RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, ShaderStages, StencilState,
+    StoreOp, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
+    TextureViewDescriptor, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
+    VertexStepMode,
 };
 
 const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/world.wgsl"));
@@ -52,10 +56,36 @@ const VERTEX_DATA: &[VertexInput] = &[
 ];
 const INDEX_DATA: &[u16] = &[0, 1, 2, 0, 2, 3];
 const MAX_INSTANCE_COUNT: u64 = 4;
+const CLEAR_COLOR: Color = Color {
+    r: 0.0,
+    g: 0.0,
+    b: 0.0,
+    a: 1.0,
+};
+
+fn create_depth_texture_view(device: &Device, width: u32, height: u32) -> TextureView {
+    device
+        .create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Depth32Float,
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
+        .create_view(&TextureViewDescriptor::default())
+}
 
 /// A pipeline implementaion of world.wgsl.
 pub(super) struct WorldPipeline {
     render_pipeline: RenderPipeline,
+    depth_texture_view: TextureView,
     camera_buffer: Buffer,
     instance_buffer: Buffer,
     bind_group_0: BindGroup,
@@ -63,7 +93,12 @@ pub(super) struct WorldPipeline {
 }
 
 impl WorldPipeline {
-    pub(super) fn new(device: &Device, color_target_state: ColorTargetState) -> Self {
+    pub(super) fn new(
+        device: &Device,
+        color_target_state: ColorTargetState,
+        width: u32,
+        height: u32,
+    ) -> Self {
         // create a shader module
         let shader_module = device.create_shader_module(ShaderModuleDescriptor {
             label: None,
@@ -123,11 +158,20 @@ impl WorldPipeline {
                 targets: &[Some(color_target_state)],
             }),
             primitive: PrimitiveState::default(),
-            depth_stencil: None,
+            depth_stencil: Some(DepthStencilState {
+                format: TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Less,
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
+            }),
             multisample: MultisampleState::default(),
             multiview: None,
             cache: None,
         });
+
+        // create a depth texture view
+        let depth_texture_view = create_depth_texture_view(device, width, height);
 
         // create a camera uniform buffer
         const CAMERA: Camera = Camera {
@@ -174,6 +218,7 @@ impl WorldPipeline {
 
         Self {
             render_pipeline,
+            depth_texture_view,
             camera_buffer,
             instance_buffer,
             bind_group_0,
@@ -181,7 +226,35 @@ impl WorldPipeline {
         }
     }
 
-    pub(super) fn attach(&self, render_pass: &mut RenderPass) {
+    /// A method to begin the render pass.
+    ///
+    /// WARN: It clears render target texture and depth texture.
+    pub(super) fn begin<'a>(
+        &self,
+        command_encoder: &'a mut CommandEncoder,
+        render_target_view: &TextureView,
+    ) -> RenderPass<'a> {
+        let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: render_target_view,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(CLEAR_COLOR),
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: &self.depth_texture_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.0),
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.bind_group_0, &[]);
         render_pass.set_vertex_buffer(0, self.square_model.vertex_buffer.slice(..));
@@ -189,6 +262,7 @@ impl WorldPipeline {
             self.square_model.index_buffer.slice(..),
             IndexFormat::Uint16,
         );
+        render_pass
     }
 
     /// A method to draw squares.
@@ -251,5 +325,9 @@ impl WorldPipeline {
             ),
         };
         queue.write_buffer(&self.camera_buffer, 0, memory::anything_to_u8slice(&camera));
+    }
+
+    pub(super) fn resize(&mut self, device: &Device, width: u32, height: u32) {
+        self.depth_texture_view = create_depth_texture_view(device, width, height);
     }
 }
