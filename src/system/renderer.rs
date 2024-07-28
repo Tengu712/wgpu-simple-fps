@@ -1,7 +1,7 @@
 mod model;
 mod world;
 
-use crate::util::camera::CameraController;
+use crate::util::{camera::CameraController, instance::InstanceController};
 use futures::executor;
 use std::{error::Error, sync::Arc};
 use wgpu::{
@@ -15,15 +15,16 @@ use winit::window::Window;
 use world::WorldPipeline;
 
 const CLEAR_COLOR: Color = Color {
-    r: 0.2,
-    g: 0.2,
-    b: 0.2,
+    r: 0.0,
+    g: 0.0,
+    b: 0.0,
     a: 1.0,
 };
 
 /// A enum for enumerating requests for a renderer.
 pub enum RenderRequest {
     UpdateCamera(CameraController),
+    Draw(Vec<InstanceController>),
 }
 
 /// A renderer on WebGPU.
@@ -211,9 +212,11 @@ impl<'a> Renderer<'a> {
                 RenderRequest::UpdateCamera(camera_controller) => self
                     .world_pipeline
                     .enqueue_update_camera(&self.queue, &camera_controller),
+                RenderRequest::Draw(instance_controllers) => {
+                    self.world_pipeline
+                        .draw(&mut render_pass, &self.queue, instance_controllers)
+                }
             }
         }
-
-        self.world_pipeline.draw(&mut render_pass);
     }
 }

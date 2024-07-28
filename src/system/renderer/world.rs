@@ -1,7 +1,7 @@
 //! This code is an implementation of world.wgsl.
 
 use super::model::Model;
-use crate::util::{camera::CameraController, memory};
+use crate::util::{camera::CameraController, instance::InstanceController, memory};
 use glam::Mat4;
 use std::{borrow::Cow, mem};
 use wgpu::{
@@ -19,41 +19,45 @@ const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/world.wg
 struct Camera {
     _projection_matrix: Mat4,
     _view_matrix: Mat4,
-    _world_matrix: Mat4,
 }
-struct Vertex {
+struct Instance {
+    _model_matrix: Mat4,
+}
+struct VertexInput {
     _position: [f32; 4],
 }
 
-const VERTEX_BUFFER_LAYOUT: VertexBufferLayout = VertexBufferLayout {
-    array_stride: mem::size_of::<Vertex>() as u64,
+const VERTEX_BUFFER_LAYOUTS: &[VertexBufferLayout] = &[VertexBufferLayout {
+    array_stride: mem::size_of::<VertexInput>() as u64,
     step_mode: VertexStepMode::Vertex,
     attributes: &[VertexAttribute {
         format: VertexFormat::Float32x4,
         offset: 0,
         shader_location: 0,
     }],
-};
-const VERTEX_DATA: &[Vertex] = &[
-    Vertex {
+}];
+const VERTEX_DATA: &[VertexInput] = &[
+    VertexInput {
         _position: [-0.5, 0.5, 0.0, 1.0],
     }, // top left
-    Vertex {
+    VertexInput {
         _position: [-0.5, -0.5, 0.0, 1.0],
     }, // bottom left
-    Vertex {
+    VertexInput {
         _position: [0.5, -0.5, 0.0, 1.0],
     }, // bottom right
-    Vertex {
+    VertexInput {
         _position: [0.5, 0.5, 0.0, 1.0],
     }, // top right
 ];
 const INDEX_DATA: &[u16] = &[0, 1, 2, 0, 2, 3];
+const MAX_INSTANCE_COUNT: u64 = 4;
 
 /// A pipeline implementaion of world.wgsl.
 pub(super) struct WorldPipeline {
     render_pipeline: RenderPipeline,
     camera_buffer: Buffer,
+    instance_buffer: Buffer,
     bind_group_0: BindGroup,
     square_model: Model,
 }
@@ -69,16 +73,30 @@ impl WorldPipeline {
         // create a bind group layout, @group(0)
         let bind_group_0_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: None,
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: BufferSize::new(mem::size_of::<Camera>() as u64),
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(mem::size_of::<Camera>() as u64),
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(
+                            mem::size_of::<Instance>() as u64 * MAX_INSTANCE_COUNT,
+                        ),
+                    },
+                    count: None,
+                },
+            ],
         });
 
         // create a pipeline layout
@@ -96,7 +114,7 @@ impl WorldPipeline {
                 module: &shader_module,
                 entry_point: "vs_main",
                 compilation_options: Default::default(),
-                buffers: &[VERTEX_BUFFER_LAYOUT],
+                buffers: VERTEX_BUFFER_LAYOUTS,
             },
             fragment: Some(FragmentState {
                 module: &shader_module,
@@ -115,7 +133,6 @@ impl WorldPipeline {
         const CAMERA: Camera = Camera {
             _projection_matrix: Mat4::IDENTITY,
             _view_matrix: Mat4::IDENTITY,
-            _world_matrix: Mat4::IDENTITY,
         };
         let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
@@ -123,14 +140,33 @@ impl WorldPipeline {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
+        // create a instance uniform buffer
+        let instances = (0..MAX_INSTANCE_COUNT)
+            .into_iter()
+            .map(|_| Instance {
+                _model_matrix: Mat4::IDENTITY,
+            })
+            .collect::<Vec<Instance>>();
+        let instance_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: memory::slice_to_u8slice(instances.as_slice()),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
         // create a bind group, @group(0)
         let bind_group_0 = device.create_bind_group(&BindGroupDescriptor {
             label: None,
             layout: &bind_group_0_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: camera_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: instance_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         // create a square model
@@ -139,6 +175,7 @@ impl WorldPipeline {
         Self {
             render_pipeline,
             camera_buffer,
+            instance_buffer,
             bind_group_0,
             square_model,
         }
@@ -154,8 +191,45 @@ impl WorldPipeline {
         );
     }
 
-    pub(super) fn draw(&self, render_pass: &mut RenderPass) {
-        render_pass.draw_indexed(0..self.square_model.index_count as u32, 0, 0..1);
+    /// A method to draw squares.
+    ///
+    /// It updates @group(0) @binding(0) instance uniform buffer and draws all at one time.
+    ///
+    /// WARN: if `model_controllers.len()` is larger than `MAX_INSTANCE_COUNT`,
+    ///       the excess is completely ignored.
+    ///
+    /// WARN: If called more than once within the same render pass,
+    ///       the instance buffer will be overwritten, affecting previous draws.
+    ///
+    /// OPTIMIZE: Not all instance information changes every frame.
+    pub(super) fn draw(
+        &self,
+        render_pass: &mut RenderPass,
+        queue: &Queue,
+        instance_controllers: Vec<InstanceController>,
+    ) {
+        // update
+        let mut count = 0;
+        let mut instances = Vec::new();
+        for n in instance_controllers {
+            if count >= MAX_INSTANCE_COUNT {
+                break;
+            }
+            count += 1;
+            instances.push(Instance {
+                _model_matrix: Mat4::from_scale_rotation_translation(
+                    n.scale, n.rotation, n.position,
+                ),
+            });
+        }
+        queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            memory::slice_to_u8slice(instances.as_slice()),
+        );
+
+        // draw
+        render_pass.draw_indexed(0..self.square_model.index_count as u32, 0, 0..count as u32);
     }
 
     pub(super) fn enqueue_update_camera(
@@ -167,7 +241,7 @@ impl WorldPipeline {
             _projection_matrix: Mat4::perspective_lh(
                 camera_controller.pov,
                 camera_controller.width / camera_controller.height,
-                0.0,
+                0.1,
                 1000.0,
             ),
             _view_matrix: Mat4::look_to_lh(
@@ -175,7 +249,6 @@ impl WorldPipeline {
                 camera_controller.direction,
                 camera_controller.up,
             ),
-            _world_matrix: Mat4::IDENTITY,
         };
         queue.write_buffer(&self.camera_buffer, 0, memory::anything_to_u8slice(&camera));
     }
