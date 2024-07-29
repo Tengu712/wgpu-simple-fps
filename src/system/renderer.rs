@@ -1,8 +1,11 @@
 mod model;
+mod skybox;
+mod texture;
 mod world;
 
 use crate::util::{camera::CameraController, instance::InstanceController};
 use futures::executor;
+use skybox::SkyboxPipeline;
 use std::sync::Arc;
 use wgpu::{
     Backends, CommandEncoder, CommandEncoderDescriptor, Device, DeviceDescriptor, Features,
@@ -29,6 +32,7 @@ pub struct Renderer<'a> {
     queue: Queue,
     surface_capabilities: SurfaceCapabilities,
     surface_format: TextureFormat,
+    skybox_pipeline: SkyboxPipeline,
     world_pipeline: WorldPipeline,
 }
 
@@ -126,6 +130,13 @@ impl<'a> Renderer<'a> {
         );
 
         // create render pipelines
+        let skybox_pipeline = SkyboxPipeline::new(
+            &device,
+            &queue,
+            surface_format.into(),
+            window.inner_size().width,
+            window.inner_size().height,
+        );
         let world_pipeline = WorldPipeline::new(
             &device,
             surface_format.into(),
@@ -141,6 +152,7 @@ impl<'a> Renderer<'a> {
             queue,
             surface_capabilities,
             surface_format,
+            skybox_pipeline,
             world_pipeline,
         }
     }
@@ -160,6 +172,7 @@ impl<'a> Renderer<'a> {
                 desired_maximum_frame_latency: 2,
             },
         );
+        self.skybox_pipeline.resize(&self.device, width, height);
         self.world_pipeline.resize(&self.device, width, height);
         info!("Renderer.resize", "textures resized: {}x{}.", width, height);
     }
@@ -168,7 +181,7 @@ impl<'a> Renderer<'a> {
     ///
     /// It locks the thread until a framebuffer is presented.
     ///
-    /// The render pipeline of world.wgsl is attached first.
+    /// The render pipeline of skybox.wgsl is attached first.
     pub fn render(&self, render_requests: Vec<RenderRequest>) {
         let surface_texture = match self.surface.get_current_texture() {
             Ok(n) => n,
@@ -200,18 +213,25 @@ impl<'a> Renderer<'a> {
         command_encoder: &mut CommandEncoder,
         render_target_view: &TextureView,
     ) {
+        self.skybox_pipeline
+            .draw(command_encoder, render_target_view);
+        /*
         let mut render_pass = self
             .world_pipeline
             .begin(command_encoder, render_target_view);
+        */
 
         for request in render_requests {
             match request {
-                RenderRequest::UpdateCamera(camera_controller) => self
-                    .world_pipeline
-                    .enqueue_update_camera(&self.queue, &camera_controller),
-                RenderRequest::Draw(instance_controllers) => {
+                RenderRequest::UpdateCamera(camera_controller) => {
                     self.world_pipeline
-                        .draw(&mut render_pass, &self.queue, instance_controllers)
+                        .enqueue_update_camera(&self.queue, &camera_controller);
+                    self.skybox_pipeline
+                        .enqueue_update_camera(&self.queue, &camera_controller);
+                }
+                RenderRequest::Draw(instance_controllers) => {
+                    //self.world_pipeline
+                    //    .draw(&mut render_pass, &self.queue, instance_controllers)
                 }
             }
         }
