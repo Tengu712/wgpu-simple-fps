@@ -5,6 +5,8 @@
 //! - fullscreen
 //! - unresizable
 //! - the maximize button is disabled
+//! - the cursor is invisible
+//! - the cursor is confined to the window area (if possible)
 
 #[macro_use]
 mod log;
@@ -17,11 +19,25 @@ use std::{error::Error, process, sync::Arc};
 use system::{input::InputManager, renderer::Renderer};
 use winit::{
     application::ApplicationHandler,
-    dpi::PhysicalSize,
+    dpi::{PhysicalPosition, PhysicalSize},
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    window::{Fullscreen, Window, WindowButtons, WindowId},
+    keyboard::KeyCode,
+    window::{CursorGrabMode, Fullscreen, Window, WindowButtons, WindowId},
 };
+
+fn set_cursor_center(window: &Arc<Window>) -> (f64, f64) {
+    let x = window.inner_size().width as f64 / 2.0;
+    let y = window.inner_size().height as f64 / 2.0;
+    if let Err(e) = window.set_cursor_position(PhysicalPosition::new(x, y)) {
+        warn!(
+            "set_cursor_center",
+            "failed to set cursor position center of window: {}",
+            e.to_string()
+        );
+    }
+    (x, y)
+}
 
 #[derive(Default)]
 struct Application<'a> {
@@ -55,6 +71,14 @@ impl<'a> ApplicationHandler for Application<'a> {
             }
         };
         window.set_enabled_buttons(WindowButtons::CLOSE | WindowButtons::MINIMIZE);
+        window.set_cursor_visible(false);
+        if let Err(e) = window.set_cursor_grab(CursorGrabMode::Confined) {
+            warn!(
+                "Application.resumed",
+                "failed to confine cursor: {}",
+                e.to_string()
+            );
+        }
         info!("Application.resumed", "window created.");
 
         // create an arc of the window
@@ -64,7 +88,8 @@ impl<'a> ApplicationHandler for Application<'a> {
         let renderer = Renderer::new(window.clone());
 
         // create an input manager
-        let input_manager = InputManager::new();
+        let cursor_position = set_cursor_center(&window);
+        let input_manager = InputManager::new(cursor_position);
 
         // create a game
         let game = Game::new(
@@ -101,6 +126,9 @@ impl<'a> ApplicationHandler for Application<'a> {
                 event,
                 is_synthetic: _,
             } => {
+                if event.physical_key == KeyCode::Escape {
+                    event_loop.exit();
+                }
                 self.input_manager.as_mut().unwrap().update_key_state(event);
             }
             WindowEvent::MouseInput {
@@ -112,6 +140,20 @@ impl<'a> ApplicationHandler for Application<'a> {
                     .as_mut()
                     .unwrap()
                     .update_mouse_state(button, state);
+            }
+            WindowEvent::CursorMoved {
+                device_id: _,
+                position,
+            } => {
+                self.input_manager
+                    .as_mut()
+                    .unwrap()
+                    .update_cursor_state(position);
+                let cursor_position = set_cursor_center(self.window.as_ref().unwrap());
+                self.input_manager
+                    .as_mut()
+                    .unwrap()
+                    .set_cursor_position(cursor_position);
             }
             _ => (),
         }
@@ -131,6 +173,7 @@ impl<'a> ApplicationHandler for Application<'a> {
             .unwrap()
             .update(input_states, &mut render_requests);
 
+        self.input_manager.as_mut().unwrap().clean();
         if let Err(e) = self.renderer.as_ref().unwrap().render(render_requests) {
             warn!(
                 "Application.about_to_wait",

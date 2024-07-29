@@ -1,4 +1,4 @@
-use glam::{Quat, Vec2, Vec3, Vec3Swizzles};
+use glam::{EulerRot, Quat, Vec3};
 
 #[derive(Clone)]
 pub struct CameraController {
@@ -26,12 +26,29 @@ impl CameraController {
     ///
     /// The rotation angle around the Y-axis of the camera is considered.
     pub fn translate(&mut self, v: Vec3) {
-        let angle = self
-            .rotation
-            .mul_vec3(Vec3::new(0.0, 0.0, 1.0))
-            .xz()
-            .normalize()
-            .angle_to(Vec2::new(0.0, 1.0));
-        self.position += Quat::from_axis_angle(Vec3::new(0.0, 1.0, 0.0), angle).mul_vec3(v);
+        self.position += Quat::from_axis_angle(
+            Vec3::new(0.0, 1.0, 0.0),
+            self.rotation.to_euler(EulerRot::YXZ).0,
+        )
+        .mul_vec3(v);
+    }
+
+    /// A method to rotate the camera.
+    ///
+    /// It rotates the camera in the following order:
+    /// 1. Y-axis around
+    /// 2. X-axis around
+    pub fn rotate(&mut self, y: f32, x: f32) {
+        let angle = self.rotation.to_euler(EulerRot::YXZ);
+        let y = angle.0 + y;
+        let x = angle.1 + x;
+        let x = if x < -90.0f32.to_radians() {
+            -90f32.to_radians()
+        } else if 90.0f32.to_radians() < x {
+            90f32.to_radians()
+        } else {
+            x
+        };
+        self.rotation = Quat::from_euler(EulerRot::YXZ, y, x, 0.0);
     }
 }

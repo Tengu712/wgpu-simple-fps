@@ -1,4 +1,4 @@
-use glam::{Quat, Vec3};
+use glam::Vec3;
 
 use crate::{
     system::{
@@ -18,8 +18,6 @@ impl Game {
         let mut camera_controller = CameraController::default();
         camera_controller.width = width;
         camera_controller.height = height;
-        camera_controller.rotation *= Quat::from_rotation_y(-20.0f32.to_radians());
-        camera_controller.rotation *= Quat::from_rotation_x(10.0f32.to_radians());
 
         // finish
         info!("Game.new", "game created.");
@@ -32,6 +30,13 @@ impl Game {
     }
 
     pub fn update(&mut self, input_states: &InputStates, render_requests: &mut Vec<RenderRequest>) {
+        // rotate camera
+        let moving_input_state = input_states.get_moving_input_state();
+        self.camera_controller.rotate(
+            moving_input_state.x as f32 / self.camera_controller.width * 90.0f32.to_radians(),
+            moving_input_state.y as f32 / self.camera_controller.height * 90.0f32.to_radians(),
+        );
+
         // move camera
         let rl = input_states.get_pressing_input_state(&PressingInput::KeyD) as i32
             - input_states.get_pressing_input_state(&PressingInput::KeyA) as i32;
