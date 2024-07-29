@@ -31,17 +31,18 @@ impl Game {
 
     pub fn update(&mut self, input_states: &InputStates, render_requests: &mut Vec<RenderRequest>) {
         // rotate camera
-        let moving_input_state = input_states.get_moving_input_state();
+        let moving_input_state = &input_states.moving_input_state;
         self.camera_controller.rotate(
             moving_input_state.x as f32 / self.camera_controller.width * 90.0f32.to_radians(),
             moving_input_state.y as f32 / self.camera_controller.height * 90.0f32.to_radians(),
         );
 
         // move camera
-        let rl = input_states.get_pressing_input_state(&PressingInput::KeyD) as i32
-            - input_states.get_pressing_input_state(&PressingInput::KeyA) as i32;
-        let fb = input_states.get_pressing_input_state(&PressingInput::KeyW) as i32
-            - input_states.get_pressing_input_state(&PressingInput::KeyS) as i32;
+        let pressing_input_state = &input_states.pressing_input_states;
+        let rl = pressing_input_state.get(&PressingInput::KeyD) as i32
+            - pressing_input_state.get(&PressingInput::KeyA) as i32;
+        let fb = pressing_input_state.get(&PressingInput::KeyW) as i32
+            - pressing_input_state.get(&PressingInput::KeyS) as i32;
         if rl != 0 || fb != 0 {
             self.camera_controller
                 .translate(Vec3::new(rl as f32, 0.0, fb as f32).normalize() * 0.1);

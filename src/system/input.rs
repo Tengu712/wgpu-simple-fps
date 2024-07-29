@@ -15,33 +15,39 @@ pub enum PressingInput {
     MouseLeft,
 }
 
+/// A struct for save the key or button pressing states.
+pub struct PressingInputStates {
+    pub states: HashMap<PressingInput, bool>,
+}
+impl Default for PressingInputStates {
+    fn default() -> Self {
+        let mut states = HashMap::new();
+        states.insert(PressingInput::KeyW, false);
+        states.insert(PressingInput::KeyA, false);
+        states.insert(PressingInput::KeyS, false);
+        states.insert(PressingInput::KeyD, false);
+        states.insert(PressingInput::MouseLeft, false);
+        Self { states }
+    }
+}
+impl PressingInputStates {
+    pub fn get(&self, pressing_input: &PressingInput) -> bool {
+        self.states.get(pressing_input).unwrap_or(&false).clone()
+    }
+}
+
 /// A struct for save the moving amount of a cursor.
-#[derive(Clone)]
+#[derive(Default)]
 pub struct MovingInputState {
     pub x: f64,
     pub y: f64,
 }
-impl Default for MovingInputState {
-    fn default() -> Self {
-        Self { x: 0.0, y: 0.0 }
-    }
-}
 
-/// An object for save input states.
+/// A struct for consolidating various input states.
+#[derive(Default)]
 pub struct InputStates {
-    pressing_input_states: HashMap<PressingInput, bool>,
-    moving_input_state: MovingInputState,
-}
-impl InputStates {
-    pub fn get_pressing_input_state(&self, pressing_input: &PressingInput) -> bool {
-        self.pressing_input_states
-            .get(pressing_input)
-            .unwrap_or(&false)
-            .clone()
-    }
-    pub fn get_moving_input_state(&self) -> MovingInputState {
-        self.moving_input_state.clone()
-    }
+    pub pressing_input_states: PressingInputStates,
+    pub moving_input_state: MovingInputState,
 }
 
 /// An input manager.
@@ -51,18 +57,9 @@ pub struct InputManager {
 }
 impl InputManager {
     pub fn new(cursor_position: (f64, f64)) -> Self {
-        let mut pressing_input_states = HashMap::new();
-        pressing_input_states.insert(PressingInput::KeyW, false);
-        pressing_input_states.insert(PressingInput::KeyA, false);
-        pressing_input_states.insert(PressingInput::KeyS, false);
-        pressing_input_states.insert(PressingInput::KeyD, false);
-        pressing_input_states.insert(PressingInput::MouseLeft, false);
         info!("InputManager.new", "input manager created.");
         Self {
-            states: InputStates {
-                pressing_input_states,
-                moving_input_state: MovingInputState::default(),
-            },
+            states: InputStates::default(),
             cursor_position,
         }
     }
@@ -81,6 +78,7 @@ impl InputManager {
         };
         self.states
             .pressing_input_states
+            .states
             .insert(input, event.state.is_pressed());
     }
 
@@ -91,6 +89,7 @@ impl InputManager {
         };
         self.states
             .pressing_input_states
+            .states
             .insert(input, state.is_pressed());
     }
 
