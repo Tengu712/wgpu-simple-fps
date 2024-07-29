@@ -2,7 +2,7 @@
 
 use super::model::Model;
 use crate::util::{camera::CameraController, instance::InstanceController, memory};
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 use std::{borrow::Cow, mem};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -320,8 +320,12 @@ impl WorldPipeline {
             ),
             _view_matrix: Mat4::look_to_lh(
                 camera_controller.position,
-                camera_controller.direction,
-                camera_controller.up,
+                camera_controller
+                    .rotation
+                    .mul_vec3(Vec3::new(0.0, 0.0, 1.0)),
+                camera_controller
+                    .rotation
+                    .mul_vec3(Vec3::new(0.0, 1.0, 0.0)),
             ),
         };
         queue.write_buffer(&self.camera_buffer, 0, memory::anything_to_u8slice(&camera));

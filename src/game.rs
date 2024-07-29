@@ -1,3 +1,5 @@
+use glam::{Quat, Vec3};
+
 use crate::{
     system::{
         input::{InputStates, PressingInput},
@@ -16,6 +18,8 @@ impl Game {
         let mut camera_controller = CameraController::default();
         camera_controller.width = width;
         camera_controller.height = height;
+        camera_controller.rotation *= Quat::from_rotation_y(-20.0f32.to_radians());
+        camera_controller.rotation *= Quat::from_rotation_x(10.0f32.to_radians());
 
         // finish
         info!("Game.new", "game created.");
@@ -28,12 +32,15 @@ impl Game {
     }
 
     pub fn update(&mut self, input_states: &InputStates, render_requests: &mut Vec<RenderRequest>) {
-        let f = input_states.get_pressing_input_state(&PressingInput::KeyW) as i32;
-        let b = input_states.get_pressing_input_state(&PressingInput::KeyS) as i32;
-        let r = input_states.get_pressing_input_state(&PressingInput::KeyD) as i32;
-        let l = input_states.get_pressing_input_state(&PressingInput::KeyA) as i32;
-        self.camera_controller.position.z += 0.1 * (f - b) as f32;
-        self.camera_controller.position.x += 0.1 * (r - l) as f32;
+        // move camera
+        let rl = input_states.get_pressing_input_state(&PressingInput::KeyD) as i32
+            - input_states.get_pressing_input_state(&PressingInput::KeyA) as i32;
+        let fb = input_states.get_pressing_input_state(&PressingInput::KeyW) as i32
+            - input_states.get_pressing_input_state(&PressingInput::KeyS) as i32;
+        if rl != 0 || fb != 0 {
+            self.camera_controller
+                .translate(Vec3::new(rl as f32, 0.0, fb as f32).normalize() * 0.1);
+        }
 
         render_requests.push(RenderRequest::UpdateCamera(self.camera_controller.clone()));
         let mut instance_controllers = Vec::new();
