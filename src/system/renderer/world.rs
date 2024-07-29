@@ -18,7 +18,7 @@ use wgpu::{
     VertexStepMode,
 };
 
-const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/world.wgsl"));
+const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/shader/world.wgsl"));
 
 struct Camera {
     _projection_matrix: Mat4,
