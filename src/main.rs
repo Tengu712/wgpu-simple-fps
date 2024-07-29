@@ -174,13 +174,7 @@ impl<'a> ApplicationHandler for Application<'a> {
             .update(input_states, &mut render_requests);
 
         self.input_manager.as_mut().unwrap().clean();
-        if let Err(e) = self.renderer.as_ref().unwrap().render(render_requests) {
-            warn!(
-                "Application.about_to_wait",
-                "failed to render: {}",
-                e.to_string()
-            );
-        }
+        self.renderer.as_ref().unwrap().render(render_requests);
     }
 }
 

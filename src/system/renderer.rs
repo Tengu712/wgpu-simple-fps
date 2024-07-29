@@ -3,7 +3,7 @@ mod world;
 
 use crate::util::{camera::CameraController, instance::InstanceController};
 use futures::executor;
-use std::{error::Error, sync::Arc};
+use std::sync::Arc;
 use wgpu::{
     Backends, CommandEncoder, CommandEncoderDescriptor, Device, DeviceDescriptor, Features,
     Instance, InstanceDescriptor, Limits, MemoryHints, PowerPreference, Queue,
@@ -169,18 +169,29 @@ impl<'a> Renderer<'a> {
     /// It locks the thread until a framebuffer is presented.
     ///
     /// The render pipeline of world.wgsl is attached first.
-    pub fn render(&self, render_requests: Vec<RenderRequest>) -> Result<(), Box<dyn Error>> {
-        let frame = self.surface.get_current_texture()?;
-        let view = frame.texture.create_view(&TextureViewDescriptor::default());
+    pub fn render(&self, render_requests: Vec<RenderRequest>) {
+        let surface_texture = match self.surface.get_current_texture() {
+            Ok(n) => n,
+            Err(e) => {
+                warn!(
+                    "Renderer.render",
+                    "failed to get surface current texture: {}",
+                    e.to_string()
+                );
+                return;
+            }
+        };
+        let render_target_view = surface_texture
+            .texture
+            .create_view(&TextureViewDescriptor::default());
         let mut command_encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
-        self.do_requests(render_requests, &mut command_encoder, &view);
+        self.do_requests(render_requests, &mut command_encoder, &render_target_view);
 
         self.queue.submit(Some(command_encoder.finish()));
-        frame.present();
-        Ok(())
+        surface_texture.present();
     }
 
     fn do_requests(
