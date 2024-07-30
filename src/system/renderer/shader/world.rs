@@ -1,7 +1,9 @@
 //! This code is an implementation of world.wgsl.
 
-use super::model::Model;
-use crate::util::{camera::CameraController, instance::InstanceController, memory};
+use crate::{
+    system::renderer::model::Model,
+    util::{camera::CameraController, instance::InstanceController, memory},
+};
 use glam::{Mat4, Vec3};
 use std::{borrow::Cow, mem};
 use wgpu::{
@@ -83,7 +85,7 @@ fn create_depth_texture_view(device: &Device, width: u32, height: u32) -> Textur
 }
 
 /// A pipeline implementaion of world.wgsl.
-pub(super) struct WorldPipeline {
+pub struct WorldPipeline {
     render_pipeline: RenderPipeline,
     depth_texture_view: TextureView,
     camera_buffer: Buffer,
@@ -93,7 +95,7 @@ pub(super) struct WorldPipeline {
 }
 
 impl WorldPipeline {
-    pub(super) fn new(
+    pub fn new(
         device: &Device,
         color_target_state: ColorTargetState,
         width: u32,
@@ -229,7 +231,7 @@ impl WorldPipeline {
     /// A method to begin the render pass.
     ///
     /// WARN: It clears render target texture and depth texture.
-    pub(super) fn begin<'a>(
+    pub fn begin<'a>(
         &self,
         command_encoder: &'a mut CommandEncoder,
         render_target_view: &TextureView,
@@ -276,7 +278,7 @@ impl WorldPipeline {
     ///       the instance buffer will be overwritten, affecting previous draws.
     ///
     /// OPTIMIZE: Not all instance information changes every frame.
-    pub(super) fn draw(
+    pub fn draw(
         &self,
         render_pass: &mut RenderPass,
         queue: &Queue,
@@ -306,11 +308,7 @@ impl WorldPipeline {
         render_pass.draw_indexed(0..self.square_model.index_count as u32, 0, 0..count as u32);
     }
 
-    pub(super) fn enqueue_update_camera(
-        &self,
-        queue: &Queue,
-        camera_controller: &CameraController,
-    ) {
+    pub fn enqueue_update_camera(&self, queue: &Queue, camera_controller: &CameraController) {
         let camera = Camera {
             _projection_matrix: Mat4::perspective_lh(
                 camera_controller.pov,
@@ -331,7 +329,7 @@ impl WorldPipeline {
         queue.write_buffer(&self.camera_buffer, 0, memory::anything_to_u8slice(&camera));
     }
 
-    pub(super) fn resize(&mut self, device: &Device, width: u32, height: u32) {
+    pub fn resize(&mut self, device: &Device, width: u32, height: u32) {
         self.depth_texture_view = create_depth_texture_view(device, width, height);
     }
 }

@@ -1,7 +1,9 @@
 //! This code is an implementation of skybox.wgsl.
 
-use super::{model::Model, texture::ImageTexture};
-use crate::util::{camera::CameraController, memory};
+use crate::{
+    system::renderer::{model::Model, texture::ImageTexture},
+    util::{camera::CameraController, memory},
+};
 use glam::{Mat4, Vec3};
 use std::{borrow::Cow, mem, process};
 use wgpu::{
@@ -181,7 +183,7 @@ fn create_depth_texture_view(device: &Device, width: u32, height: u32) -> Textur
 }
 
 /// A pipeline implementaion of world.wgsl.
-pub(super) struct SkyboxPipeline {
+pub struct SkyboxPipeline {
     render_pipeline: RenderPipeline,
     depth_texture_view: TextureView,
     camera_buffer: Buffer,
@@ -190,7 +192,7 @@ pub(super) struct SkyboxPipeline {
 }
 
 impl SkyboxPipeline {
-    pub(super) fn new(
+    pub fn new(
         device: &Device,
         queue: &Queue,
         color_target_state: ColorTargetState,
@@ -347,7 +349,7 @@ impl SkyboxPipeline {
     /// A method to draw a skybox.
     ///
     /// WARN: It clears render target texture and depth texture.
-    pub(super) fn draw<'a>(
+    pub fn draw<'a>(
         &self,
         command_encoder: &'a mut CommandEncoder,
         render_target_view: &TextureView,
@@ -380,11 +382,7 @@ impl SkyboxPipeline {
         render_pass.draw_indexed(0..self.model.index_count as u32, 0, 0..1);
     }
 
-    pub(super) fn enqueue_update_camera(
-        &self,
-        queue: &Queue,
-        camera_controller: &CameraController,
-    ) {
+    pub fn enqueue_update_camera(&self, queue: &Queue, camera_controller: &CameraController) {
         let camera = Camera {
             _projection_matrix: Mat4::perspective_lh(
                 camera_controller.pov,
@@ -405,7 +403,7 @@ impl SkyboxPipeline {
         queue.write_buffer(&self.camera_buffer, 0, memory::anything_to_u8slice(&camera));
     }
 
-    pub(super) fn resize(&mut self, device: &Device, width: u32, height: u32) {
+    pub fn resize(&mut self, device: &Device, width: u32, height: u32) {
         self.depth_texture_view = create_depth_texture_view(device, width, height);
     }
 }

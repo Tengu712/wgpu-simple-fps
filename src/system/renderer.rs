@@ -1,11 +1,10 @@
 mod model;
-mod skybox;
+mod shader;
 mod texture;
-mod world;
 
 use crate::util::{camera::CameraController, instance::InstanceController};
 use futures::executor;
-use skybox::SkyboxPipeline;
+use shader::{skybox::SkyboxPipeline, world::WorldPipeline};
 use std::sync::Arc;
 use wgpu::{
     Backends, CommandEncoder, CommandEncoderDescriptor, Device, DeviceDescriptor, Features,
@@ -14,7 +13,6 @@ use wgpu::{
     TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
-use world::WorldPipeline;
 
 /// A enum for enumerating requests for a renderer.
 pub enum RenderRequest {
