@@ -49,6 +49,7 @@ impl Game {
         }
 
         render_requests.push(RenderRequest::UpdateCamera(self.camera_controller.clone()));
+        render_requests.push(RenderRequest::DrawSkybox);
         let mut instance_controllers = Vec::new();
         let mut instance = InstanceController::default();
         instance.position.x = -1.0;
@@ -58,6 +59,6 @@ impl Game {
         instance.position.x = 1.0;
         instance.position.z = 10.0;
         instance_controllers.push(instance);
-        render_requests.push(RenderRequest::Draw(instance_controllers));
+        render_requests.push(RenderRequest::DrawWorld(instance_controllers));
     }
 }

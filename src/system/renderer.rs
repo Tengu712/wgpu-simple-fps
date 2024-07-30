@@ -1,3 +1,4 @@
+mod depth;
 mod model;
 mod shader;
 mod texture;
@@ -7,17 +8,18 @@ use futures::executor;
 use shader::{skybox::SkyboxPipeline, world::WorldPipeline};
 use std::sync::Arc;
 use wgpu::{
-    Backends, CommandEncoder, CommandEncoderDescriptor, Device, DeviceDescriptor, Features,
-    Instance, InstanceDescriptor, Limits, MemoryHints, PowerPreference, Queue,
-    RequestAdapterOptions, Surface, SurfaceCapabilities, SurfaceConfiguration, TextureFormat,
-    TextureUsages, TextureView, TextureViewDescriptor,
+    Backends, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, Instance,
+    InstanceDescriptor, Limits, MemoryHints, PowerPreference, Queue, RequestAdapterOptions,
+    Surface, SurfaceCapabilities, SurfaceConfiguration, TextureFormat, TextureUsages,
+    TextureViewDescriptor,
 };
 use winit::window::Window;
 
 /// A enum for enumerating requests for a renderer.
 pub enum RenderRequest {
     UpdateCamera(CameraController),
-    Draw(Vec<InstanceController>),
+    DrawSkybox,
+    DrawWorld(Vec<InstanceController>),
 }
 
 /// A renderer on WebGPU.
@@ -178,8 +180,6 @@ impl<'a> Renderer<'a> {
     /// A method to render entities.
     ///
     /// It locks the thread until a framebuffer is presented.
-    ///
-    /// The render pipeline of skybox.wgsl is attached first.
     pub fn render(&self, render_requests: Vec<RenderRequest>) {
         let surface_texture = match self.surface.get_current_texture() {
             Ok(n) => n,
@@ -199,26 +199,6 @@ impl<'a> Renderer<'a> {
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
-        self.do_requests(render_requests, &mut command_encoder, &render_target_view);
-
-        self.queue.submit(Some(command_encoder.finish()));
-        surface_texture.present();
-    }
-
-    fn do_requests(
-        &self,
-        render_requests: Vec<RenderRequest>,
-        command_encoder: &mut CommandEncoder,
-        render_target_view: &TextureView,
-    ) {
-        self.skybox_pipeline
-            .draw(command_encoder, render_target_view);
-        /*
-        let mut render_pass = self
-            .world_pipeline
-            .begin(command_encoder, render_target_view);
-        */
-
         for request in render_requests {
             match request {
                 RenderRequest::UpdateCamera(camera_controller) => {
@@ -227,11 +207,22 @@ impl<'a> Renderer<'a> {
                     self.skybox_pipeline
                         .enqueue_update_camera(&self.queue, &camera_controller);
                 }
-                RenderRequest::Draw(instance_controllers) => {
-                    //self.world_pipeline
-                    //    .draw(&mut render_pass, &self.queue, instance_controllers)
+                RenderRequest::DrawSkybox => {
+                    self.skybox_pipeline
+                        .draw(&mut command_encoder, &render_target_view);
+                }
+                RenderRequest::DrawWorld(instance_controllers) => {
+                    self.world_pipeline.draw(
+                        &mut command_encoder,
+                        &self.queue,
+                        &render_target_view,
+                        instance_controllers,
+                    );
                 }
             }
         }
+
+        self.queue.submit(Some(command_encoder.finish()));
+        surface_texture.present();
     }
 }

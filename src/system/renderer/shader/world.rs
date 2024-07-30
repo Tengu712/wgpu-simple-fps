@@ -1,7 +1,7 @@
 //! This code is an implementation of world.wgsl.
 
 use crate::{
-    system::renderer::model::Model,
+    system::renderer::{depth, model::Model},
     util::{camera::CameraController, instance::InstanceController, memory},
 };
 use glam::{Mat4, Vec3};
@@ -9,15 +9,12 @@ use std::{borrow::Cow, mem};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferSize, BufferUsages, Color,
-    ColorTargetState, CommandEncoder, CompareFunction, DepthBiasState, DepthStencilState, Device,
-    Extent3d, FragmentState, IndexFormat, LoadOp, MultisampleState, Operations,
-    PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPassColorAttachment,
+    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferSize, BufferUsages,
+    ColorTargetState, CommandEncoder, Device, FragmentState, IndexFormat, LoadOp, MultisampleState,
+    Operations, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPassColorAttachment,
     RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, ShaderStages, StencilState,
-    StoreOp, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
-    TextureViewDescriptor, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
-    VertexStepMode,
+    RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp,
+    TextureView, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
 
 const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/shader/world.wgsl"));
@@ -58,31 +55,6 @@ const VERTEX_DATA: &[VertexInput] = &[
 ];
 const INDEX_DATA: &[u16] = &[0, 1, 2, 0, 2, 3];
 const MAX_INSTANCE_COUNT: u64 = 4;
-const CLEAR_COLOR: Color = Color {
-    r: 0.0,
-    g: 0.0,
-    b: 0.0,
-    a: 1.0,
-};
-
-fn create_depth_texture_view(device: &Device, width: u32, height: u32) -> TextureView {
-    device
-        .create_texture(&TextureDescriptor {
-            label: None,
-            size: Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Depth32Float,
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        })
-        .create_view(&TextureViewDescriptor::default())
-}
 
 /// A pipeline implementaion of world.wgsl.
 pub struct WorldPipeline {
@@ -160,20 +132,14 @@ impl WorldPipeline {
                 targets: &[Some(color_target_state)],
             }),
             primitive: PrimitiveState::default(),
-            depth_stencil: Some(DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::Less,
-                stencil: StencilState::default(),
-                bias: DepthBiasState::default(),
-            }),
+            depth_stencil: Some(depth::DEPTH_STENCIL_STATE),
             multisample: MultisampleState::default(),
             multiview: None,
             cache: None,
         });
 
         // create a depth texture view
-        let depth_texture_view = create_depth_texture_view(device, width, height);
+        let depth_texture_view = depth::create_depth_texture_view(device, width, height);
 
         // create a camera uniform buffer
         const CAMERA: Camera = Camera {
@@ -228,21 +194,29 @@ impl WorldPipeline {
         }
     }
 
-    /// A method to begin the render pass.
+    /// A method to draw squares.
     ///
-    /// WARN: It clears render target texture and depth texture.
-    pub fn begin<'a>(
+    /// It updates @group(0) @binding(0) instance uniform buffer and draws all at one time.
+    ///
+    /// WARN: if `model_controllers.len()` is larger than `MAX_INSTANCE_COUNT`,
+    ///       the excess is completely ignored.
+    ///
+    /// OPTIMIZE: Not all instance information changes every frame.
+    pub fn draw<'a>(
         &self,
         command_encoder: &'a mut CommandEncoder,
+        queue: &Queue,
         render_target_view: &TextureView,
-    ) -> RenderPass<'a> {
+        instance_controllers: Vec<InstanceController>,
+    ) {
+        // begin render pass
         let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: render_target_view,
                 resolve_target: None,
                 ops: Operations {
-                    load: LoadOp::Clear(CLEAR_COLOR),
+                    load: LoadOp::Load,
                     store: StoreOp::Store,
                 },
             })],
@@ -257,6 +231,8 @@ impl WorldPipeline {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
+
+        // prepare
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.bind_group_0, &[]);
         render_pass.set_vertex_buffer(0, self.square_model.vertex_buffer.slice(..));
@@ -264,27 +240,8 @@ impl WorldPipeline {
             self.square_model.index_buffer.slice(..),
             IndexFormat::Uint16,
         );
-        render_pass
-    }
 
-    /// A method to draw squares.
-    ///
-    /// It updates @group(0) @binding(0) instance uniform buffer and draws all at one time.
-    ///
-    /// WARN: if `model_controllers.len()` is larger than `MAX_INSTANCE_COUNT`,
-    ///       the excess is completely ignored.
-    ///
-    /// WARN: If called more than once within the same render pass,
-    ///       the instance buffer will be overwritten, affecting previous draws.
-    ///
-    /// OPTIMIZE: Not all instance information changes every frame.
-    pub fn draw(
-        &self,
-        render_pass: &mut RenderPass,
-        queue: &Queue,
-        instance_controllers: Vec<InstanceController>,
-    ) {
-        // update
+        // update instance uniform buffer
         let mut count = 0;
         let mut instances = Vec::new();
         for n in instance_controllers {
@@ -330,6 +287,6 @@ impl WorldPipeline {
     }
 
     pub fn resize(&mut self, device: &Device, width: u32, height: u32) {
-        self.depth_texture_view = create_depth_texture_view(device, width, height);
+        self.depth_texture_view = depth::create_depth_texture_view(device, width, height);
     }
 }

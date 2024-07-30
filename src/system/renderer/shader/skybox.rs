@@ -1,7 +1,7 @@
 //! This code is an implementation of skybox.wgsl.
 
 use crate::{
-    system::renderer::{model::Model, texture::ImageTexture},
+    system::renderer::{depth, model::Model, texture::ImageTexture},
     util::{camera::CameraController, memory},
 };
 use glam::{Mat4, Vec3};
@@ -10,15 +10,13 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType, BufferSize,
-    BufferUsages, Color, ColorTargetState, CommandEncoder, CompareFunction, DepthBiasState,
-    DepthStencilState, Device, Extent3d, FilterMode, FragmentState, IndexFormat, LoadOp,
-    MultisampleState, Operations, PipelineLayoutDescriptor, PrimitiveState, Queue,
-    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    BufferUsages, Color, ColorTargetState, CommandEncoder, Device, FilterMode, FragmentState,
+    IndexFormat, LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor, PrimitiveState,
+    Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RenderPipeline, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor,
-    ShaderModuleDescriptor, ShaderSource, ShaderStages, StencilState, StoreOp, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureView,
-    TextureViewDescriptor, TextureViewDimension, VertexAttribute, VertexBufferLayout, VertexFormat,
-    VertexState, VertexStepMode,
+    ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, TextureSampleType, TextureView,
+    TextureViewDimension, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
+    VertexStepMode,
 };
 
 const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/shader/skybox.wgsl"));
@@ -163,25 +161,6 @@ const CLEAR_COLOR: Color = Color {
     a: 1.0,
 };
 
-fn create_depth_texture_view(device: &Device, width: u32, height: u32) -> TextureView {
-    device
-        .create_texture(&TextureDescriptor {
-            label: None,
-            size: Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Depth32Float,
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        })
-        .create_view(&TextureViewDescriptor::default())
-}
-
 /// A pipeline implementaion of world.wgsl.
 pub struct SkyboxPipeline {
     render_pipeline: RenderPipeline,
@@ -262,20 +241,14 @@ impl SkyboxPipeline {
                 targets: &[Some(color_target_state)],
             }),
             primitive: PrimitiveState::default(),
-            depth_stencil: Some(DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::Less,
-                stencil: StencilState::default(),
-                bias: DepthBiasState::default(),
-            }),
+            depth_stencil: Some(depth::DEPTH_STENCIL_STATE),
             multisample: MultisampleState::default(),
             multiview: None,
             cache: None,
         });
 
         // create a depth texture view
-        let depth_texture_view = create_depth_texture_view(device, width, height);
+        let depth_texture_view = depth::create_depth_texture_view(device, width, height);
 
         // create a camera uniform buffer
         const CAMERA: Camera = Camera {
@@ -404,6 +377,6 @@ impl SkyboxPipeline {
     }
 
     pub fn resize(&mut self, device: &Device, width: u32, height: u32) {
-        self.depth_texture_view = create_depth_texture_view(device, width, height);
+        self.depth_texture_view = depth::create_depth_texture_view(device, width, height);
     }
 }
