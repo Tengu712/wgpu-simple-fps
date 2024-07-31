@@ -54,11 +54,20 @@ impl<'a> ApplicationHandler for Application<'a> {
             return;
         }
 
+        // get a primary monitor
+        let primary_monitor = if let Some(n) = event_loop.primary_monitor() {
+            n
+        } else {
+            error!("Application.resumed", "no primary monitor is found.");
+            process::exit(1);
+        };
+
         // create a window
         let window_attributes = Window::default_attributes()
             .with_title("WebGPU Simple FPS")
             .with_resizable(false)
-            .with_fullscreen(Some(Fullscreen::Borderless(None)));
+            .with_inner_size(primary_monitor.size())
+            .with_fullscreen(Some(Fullscreen::Borderless(Some(primary_monitor))));
         let window = match event_loop.create_window(window_attributes) {
             Ok(n) => n,
             Err(e) => {
@@ -67,9 +76,12 @@ impl<'a> ApplicationHandler for Application<'a> {
                     "failed to create a window: {}",
                     e.to_string()
                 );
-                std::process::exit(1);
+                process::exit(1);
             }
         };
+        let window = Arc::new(window);
+
+        // configure the window
         window.set_enabled_buttons(WindowButtons::CLOSE | WindowButtons::MINIMIZE);
         window.set_cursor_visible(false);
         if let Err(e) = window.set_cursor_grab(CursorGrabMode::Confined) {
@@ -81,17 +93,9 @@ impl<'a> ApplicationHandler for Application<'a> {
         }
         info!("Application.resumed", "window created.");
 
-        // create an arc of the window
-        let window = Arc::new(window);
-
-        // create a renderer
+        // create objects
         let renderer = Renderer::new(window.clone());
-
-        // create an input manager
-        let cursor_position = set_cursor_center(&window);
-        let input_manager = InputManager::new(cursor_position);
-
-        // create a game
+        let input_manager = InputManager::new(set_cursor_center(&window));
         let game = Game::new(
             window.inner_size().width as f32,
             window.inner_size().height as f32,
