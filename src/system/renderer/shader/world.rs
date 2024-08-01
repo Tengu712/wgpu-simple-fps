@@ -1,7 +1,8 @@
-//! This code is an implementation of world.wgsl.
-
 use crate::{
-    system::renderer::{depth, model::Model},
+    system::renderer::{
+        depth,
+        model::{self, Model},
+    },
     util::{camera::CameraController, instance::InstanceController, memory},
 };
 use glam::{Mat4, Vec3};
@@ -14,7 +15,7 @@ use wgpu::{
     Operations, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPassColorAttachment,
     RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline,
     RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp,
-    TextureView, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+    TextureView, VertexState,
 };
 
 const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/shader/world.wgsl"));
@@ -26,34 +27,7 @@ struct Camera {
 struct Instance {
     _model_matrix: Mat4,
 }
-struct VertexInput {
-    _position: [f32; 4],
-}
 
-const VERTEX_BUFFER_LAYOUTS: &[VertexBufferLayout] = &[VertexBufferLayout {
-    array_stride: mem::size_of::<VertexInput>() as u64,
-    step_mode: VertexStepMode::Vertex,
-    attributes: &[VertexAttribute {
-        format: VertexFormat::Float32x4,
-        offset: 0,
-        shader_location: 0,
-    }],
-}];
-const VERTEX_DATA: &[VertexInput] = &[
-    VertexInput {
-        _position: [-0.5, 0.5, 0.0, 1.0],
-    }, // top left
-    VertexInput {
-        _position: [-0.5, -0.5, 0.0, 1.0],
-    }, // bottom left
-    VertexInput {
-        _position: [0.5, -0.5, 0.0, 1.0],
-    }, // bottom right
-    VertexInput {
-        _position: [0.5, 0.5, 0.0, 1.0],
-    }, // top right
-];
-const INDEX_DATA: &[u16] = &[0, 1, 2, 0, 2, 3];
 const MAX_INSTANCE_COUNT: u64 = 4;
 
 /// A pipeline implementaion of world.wgsl.
@@ -63,7 +37,7 @@ pub struct WorldPipeline {
     camera_buffer: Buffer,
     instance_buffer: Buffer,
     bind_group_0: BindGroup,
-    square_model: Model,
+    model: Model,
 }
 
 impl WorldPipeline {
@@ -123,7 +97,7 @@ impl WorldPipeline {
                 module: &shader_module,
                 entry_point: "vs_main",
                 compilation_options: Default::default(),
-                buffers: VERTEX_BUFFER_LAYOUTS,
+                buffers: model::VERTEX_BUFFER_LAYOUTS,
             },
             fragment: Some(FragmentState {
                 module: &shader_module,
@@ -182,7 +156,7 @@ impl WorldPipeline {
         });
 
         // create a square model
-        let square_model = Model::from(device, VERTEX_DATA, INDEX_DATA);
+        let model = Model::rectangle(device, 1.0, 1.0);
 
         Self {
             render_pipeline,
@@ -190,7 +164,7 @@ impl WorldPipeline {
             camera_buffer,
             instance_buffer,
             bind_group_0,
-            square_model,
+            model,
         }
     }
 
@@ -235,11 +209,8 @@ impl WorldPipeline {
         // prepare
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.bind_group_0, &[]);
-        render_pass.set_vertex_buffer(0, self.square_model.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(
-            self.square_model.index_buffer.slice(..),
-            IndexFormat::Uint16,
-        );
+        render_pass.set_vertex_buffer(0, self.model.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.model.index_buffer.slice(..), IndexFormat::Uint16);
 
         // update instance uniform buffer
         let mut count = 0;
@@ -262,7 +233,7 @@ impl WorldPipeline {
         );
 
         // draw
-        render_pass.draw_indexed(0..self.square_model.index_count as u32, 0, 0..count as u32);
+        render_pass.draw_indexed(0..self.model.index_count as u32, 0, 0..count as u32);
     }
 
     pub fn enqueue_update_camera(&self, queue: &Queue, camera_controller: &CameraController) {

@@ -1,7 +1,9 @@
-//! This code is an implementation of skybox.wgsl.
-
 use crate::{
-    system::renderer::{depth, model::Model, texture::ImageTexture},
+    system::renderer::{
+        depth,
+        model::{self, Model},
+        texture::ImageTexture,
+    },
     util::{camera::CameraController, memory},
 };
 use glam::{Mat4, Vec3};
@@ -15,8 +17,7 @@ use wgpu::{
     Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RenderPipeline, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor,
     ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, TextureSampleType, TextureView,
-    TextureViewDimension, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
-    VertexStepMode,
+    TextureViewDimension, VertexState,
 };
 
 const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/shader/skybox.wgsl"));
@@ -26,134 +27,7 @@ struct Camera {
     _projection_matrix: Mat4,
     _view_matrix: Mat4,
 }
-struct VertexInput {
-    _position: [f32; 4],
-    _tex_coord: [f32; 2],
-}
 
-const VERTEX_BUFFER_LAYOUTS: &[VertexBufferLayout] = &[VertexBufferLayout {
-    array_stride: mem::size_of::<VertexInput>() as u64,
-    step_mode: VertexStepMode::Vertex,
-    attributes: &[
-        VertexAttribute {
-            format: VertexFormat::Float32x4,
-            offset: 0,
-            shader_location: 0,
-        },
-        VertexAttribute {
-            format: VertexFormat::Float32x2,
-            offset: mem::size_of::<[f32; 4]>() as u64,
-            shader_location: 1,
-        },
-    ],
-}];
-// WARN: Culling clockwise will make it disappear.
-const VERTEX_DATA: &[VertexInput] = &[
-    VertexInput {
-        _position: [-50.0, 50.0, -50.0, 1.0],
-        _tex_coord: [0.0, 0.0],
-    }, // top: top left
-    VertexInput {
-        _position: [50.0, 50.0, -50.0, 1.0],
-        _tex_coord: [0.0, 0.5],
-    }, // top: top right
-    VertexInput {
-        _position: [50.0, 50.0, 50.0, 1.0],
-        _tex_coord: [0.5, 0.5],
-    }, // top: bottom right
-    VertexInput {
-        _position: [-50.0, 50.0, 50.0, 1.0],
-        _tex_coord: [0.0, 0.5],
-    }, // top: bottom left
-    VertexInput {
-        _position: [-50.0, 50.0, -50.0, 1.0],
-        _tex_coord: [0.0, 0.5],
-    }, // left: top left
-    VertexInput {
-        _position: [-50.0, 50.0, 50.0, 1.0],
-        _tex_coord: [0.5, 0.5],
-    }, // left: top right
-    VertexInput {
-        _position: [-50.0, -50.0, 50.0, 1.0],
-        _tex_coord: [0.5, 1.0],
-    }, // left: bottom right
-    VertexInput {
-        _position: [-50.0, -50.0, -50.0, 1.0],
-        _tex_coord: [0.0, 1.0],
-    }, // left: bottom left
-    VertexInput {
-        _position: [-50.0, 50.0, 50.0, 1.0],
-        _tex_coord: [0.0, 0.5],
-    }, // back: top left
-    VertexInput {
-        _position: [50.0, 50.0, 50.0, 1.0],
-        _tex_coord: [0.5, 0.5],
-    }, // back: top right
-    VertexInput {
-        _position: [50.0, -50.0, 50.0, 1.0],
-        _tex_coord: [0.5, 1.0],
-    }, // back: bottom right
-    VertexInput {
-        _position: [-50.0, -50.0, 50.0, 1.0],
-        _tex_coord: [0.0, 1.0],
-    }, // back: bottom left
-    VertexInput {
-        _position: [50.0, 50.0, 50.0, 1.0],
-        _tex_coord: [0.0, 0.5],
-    }, // right: top left
-    VertexInput {
-        _position: [50.0, 50.0, -50.0, 1.0],
-        _tex_coord: [0.5, 0.5],
-    }, // right: top right
-    VertexInput {
-        _position: [50.0, -50.0, -50.0, 1.0],
-        _tex_coord: [0.5, 1.0],
-    }, // right: bottom right
-    VertexInput {
-        _position: [50.0, -50.0, 50.0, 1.0],
-        _tex_coord: [0.0, 1.0],
-    }, // right: bottom left
-    VertexInput {
-        _position: [50.0, 50.0, -50.0, 1.0],
-        _tex_coord: [0.0, 0.5],
-    }, // front: top left
-    VertexInput {
-        _position: [-50.0, 50.0, -50.0, 1.0],
-        _tex_coord: [0.5, 0.5],
-    }, // front: top right
-    VertexInput {
-        _position: [-50.0, -50.0, -50.0, 1.0],
-        _tex_coord: [0.5, 1.0],
-    }, // front: bottom right
-    VertexInput {
-        _position: [50.0, -50.0, -50.0, 1.0],
-        _tex_coord: [0.0, 1.0],
-    }, // front: bottom left
-    VertexInput {
-        _position: [-50.0, -50.0, 50.0, 1.0],
-        _tex_coord: [0.5, 0.5],
-    }, // bottom: top left
-    VertexInput {
-        _position: [50.0, -50.0, 50.0, 1.0],
-        _tex_coord: [1.0, 0.5],
-    }, // bottom: top right
-    VertexInput {
-        _position: [50.0, -50.0, -50.0, 1.0],
-        _tex_coord: [1.0, 1.0],
-    }, // bottom: bottom right
-    VertexInput {
-        _position: [-50.0, -50.0, -50.0, 1.0],
-        _tex_coord: [0.5, 1.0],
-    }, // bottom: bottom left
-];
-const INDEX_DATA: &[u16] = &[
-    0, 1, 2, 0, 2, 3, // top
-    4, 5, 6, 4, 6, 7, // left
-    8, 9, 10, 8, 10, 11, // back
-    12, 13, 14, 12, 14, 15, // right
-    16, 17, 18, 16, 18, 19, // front
-    20, 21, 22, 20, 22, 23, // bottom
-];
 const CLEAR_COLOR: Color = Color {
     r: 0.0,
     g: 0.0,
@@ -232,7 +106,7 @@ impl SkyboxPipeline {
                 module: &shader_module,
                 entry_point: "vs_main",
                 compilation_options: Default::default(),
-                buffers: VERTEX_BUFFER_LAYOUTS,
+                buffers: model::VERTEX_BUFFER_LAYOUTS,
             },
             fragment: Some(FragmentState {
                 module: &shader_module,
@@ -307,8 +181,8 @@ impl SkyboxPipeline {
             ],
         });
 
-        // create a cube model
-        let model = Model::from(device, VERTEX_DATA, INDEX_DATA);
+        // create a sphere model
+        let model = Model::sphere(device, 50.0, 20, 20);
 
         Self {
             render_pipeline,

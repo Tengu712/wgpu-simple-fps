@@ -15,6 +15,7 @@ var<uniform> instances: array<Instance, 4>;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
+    @location(1) tex_coord: vec2<f32>,
 }
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
