@@ -1,7 +1,7 @@
 use crate::{
     system::renderer::{
-        depth,
         model::{self, Model},
+        texture::depth,
     },
     util::{camera::CameraController, instance::InstanceController, memory},
 };

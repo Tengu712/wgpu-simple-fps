@@ -1,4 +1,3 @@
-mod depth;
 mod model;
 mod shader;
 mod texture;

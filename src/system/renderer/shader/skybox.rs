@@ -1,8 +1,7 @@
 use crate::{
     system::renderer::{
-        depth,
         model::{self, Model},
-        texture::ImageTexture,
+        texture::{depth, image},
     },
     util::{camera::CameraController, memory},
 };
@@ -10,14 +9,14 @@ use glam::{Mat4, Vec3};
 use std::{borrow::Cow, mem, process};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType, BufferSize,
-    BufferUsages, Color, ColorTargetState, CommandEncoder, Device, FilterMode, FragmentState,
-    IndexFormat, LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor, PrimitiveState,
-    Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor,
-    ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, TextureSampleType, TextureView,
-    TextureViewDimension, VertexState,
+    BufferUsages, Color, ColorTargetState, CommandEncoder, Device, FragmentState, IndexFormat,
+    LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor, PrimitiveState, Queue,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RenderPipeline, RenderPipelineDescriptor, SamplerBindingType, ShaderModuleDescriptor,
+    ShaderSource, ShaderStages, StoreOp, TextureSampleType, TextureView, TextureViewDimension,
+    VertexState,
 };
 
 const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/shader/skybox.wgsl"));
@@ -135,8 +134,8 @@ impl SkyboxPipeline {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        // create a skybox image texture
-        let image_texture = match ImageTexture::new(device, queue, IMAGE_PATH) {
+        // create a skybox image texture and a sampler
+        let image_texture_view = match image::create_image_texture_view(device, queue, IMAGE_PATH) {
             Ok(n) => n,
             Err(e) => {
                 error!(
@@ -148,18 +147,7 @@ impl SkyboxPipeline {
                 process::exit(1);
             }
         };
-
-        // create a sampler
-        let sampler = device.create_sampler(&SamplerDescriptor {
-            label: None,
-            address_mode_u: AddressMode::Repeat,
-            address_mode_v: AddressMode::Repeat,
-            address_mode_w: AddressMode::Repeat,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
-            ..Default::default()
-        });
+        let sampler = image::create_sampler(device);
 
         // create a bind group, @group(0)
         let bind_group_0 = device.create_bind_group(&BindGroupDescriptor {
@@ -172,7 +160,7 @@ impl SkyboxPipeline {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(&image_texture.texture_view),
+                    resource: BindingResource::TextureView(&image_texture_view),
                 },
                 BindGroupEntry {
                     binding: 2,
