@@ -22,15 +22,13 @@ impl Default for CameraController {
 }
 
 impl CameraController {
-    /// A method to translate the camera.
-    ///
-    /// The rotation angle around the Y-axis of the camera is considered.
-    pub fn translate(&mut self, v: Vec3) {
-        self.position += Quat::from_axis_angle(
+    /// A method to align a vector to the camera's x-z plane direction.
+    pub fn align_to_direction(&self, v: Vec3) -> Vec3 {
+        Quat::from_axis_angle(
             Vec3::new(0.0, 1.0, 0.0),
             self.rotation.to_euler(EulerRot::YXZ).0,
         )
-        .mul_vec3(v);
+        .mul_vec3(v)
     }
 
     /// A method to rotate the camera.

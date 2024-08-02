@@ -35,7 +35,7 @@ fn vs_main(
         * instances[instance_index].model_matrix
         * vertex_input.position;
 
-    let c = 1.0 - result.position.z / 20.0;
+    let c = 1.0 - result.position.z / 40.0;
     result.color = vec4<f32>(c, c, c, 1.0);
 
     return result;

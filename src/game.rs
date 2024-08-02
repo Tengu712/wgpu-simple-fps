@@ -1,15 +1,18 @@
-use glam::Vec3;
+mod wall;
 
 use crate::{
     system::{
         input::{InputStates, PressingInput},
         renderer::RenderRequest,
     },
-    util::{camera::CameraController, instance::InstanceController},
+    util::camera::CameraController,
 };
+use glam::Vec3;
+use wall::Wall;
 
 pub struct Game {
     camera_controller: CameraController,
+    walls: [Wall; 4],
 }
 
 impl Game {
@@ -18,10 +21,22 @@ impl Game {
         let mut camera_controller = CameraController::default();
         camera_controller.width = width;
         camera_controller.height = height;
+        camera_controller.position.y = 1.0;
+
+        // create walls
+        let walls = [
+            Wall::new(0.0, 20.0, 0.0, 40.0),
+            Wall::new(0.0, -20.0, 180.0f32.to_radians(), 40.0),
+            Wall::new(20.0, 0.0, 90.0f32.to_radians(), 40.0),
+            Wall::new(-20.0, 0.0, -90.0f32.to_radians(), 40.0),
+        ];
 
         // finish
         info!("Game.new", "game created.");
-        Self { camera_controller }
+        Self {
+            camera_controller,
+            walls,
+        }
     }
 
     pub fn resize(&mut self, width: f32, height: f32) {
@@ -44,21 +59,26 @@ impl Game {
         let fb = pressing_input_state.get(&PressingInput::KeyW) as i32
             - pressing_input_state.get(&PressingInput::KeyS) as i32;
         if rl != 0 || fb != 0 {
-            self.camera_controller
-                .translate(Vec3::new(rl as f32, 0.0, fb as f32).normalize() * 0.1);
+            // create a correct velocity
+            let mut velocity = self
+                .camera_controller
+                .align_to_direction(Vec3::new(rl as f32, 0.0, fb as f32).normalize() * 0.2);
+
+            // check wall collisions
+            for n in self.walls.iter() {
+                velocity = n.check_collision(self.camera_controller.position, velocity);
+            }
+
+            // move
+            self.camera_controller.position += velocity;
         }
 
         render_requests.push(RenderRequest::UpdateCamera(self.camera_controller.clone()));
         render_requests.push(RenderRequest::DrawSkybox);
         let mut instance_controllers = Vec::new();
-        let mut instance = InstanceController::default();
-        instance.position.x = -1.0;
-        instance.position.z = 5.0;
-        instance_controllers.push(instance);
-        let mut instance = InstanceController::default();
-        instance.position.x = 1.0;
-        instance.position.z = 10.0;
-        instance_controllers.push(instance);
+        for n in self.walls.iter() {
+            instance_controllers.push(n.get_instance_controller());
+        }
         render_requests.push(RenderRequest::DrawWorld(instance_controllers));
     }
 }
