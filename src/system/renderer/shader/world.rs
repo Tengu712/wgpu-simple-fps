@@ -5,7 +5,7 @@ use crate::{
     },
     util::{camera::CameraController, instance::InstanceController, memory},
 };
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Vec4};
 use std::{borrow::Cow, mem};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -24,8 +24,12 @@ struct Camera {
     _projection_matrix: Mat4,
     _view_matrix: Mat4,
 }
+struct Light {
+    _position: Vec4,
+}
 struct Instance {
     _model_matrix: Mat4,
+    _model_matrix_inversed: Mat4,
 }
 
 const MAX_INSTANCE_COUNT: u64 = 4;
@@ -69,6 +73,16 @@ impl WorldPipeline {
                 },
                 BindGroupLayoutEntry {
                     binding: 1,
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(mem::size_of::<Light>() as u64),
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 2,
                     visibility: ShaderStages::VERTEX,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
@@ -126,11 +140,22 @@ impl WorldPipeline {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
+        // create a light uniform buffer
+        const LIGHT: Light = Light {
+            _position: Vec4::new(1.0, 10.0, -10.0, 1.0),
+        };
+        let light_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: memory::anything_to_u8slice(&LIGHT),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
         // create a instance uniform buffer
         let instances = (0..MAX_INSTANCE_COUNT)
             .into_iter()
             .map(|_| Instance {
                 _model_matrix: Mat4::IDENTITY,
+                _model_matrix_inversed: Mat4::IDENTITY,
             })
             .collect::<Vec<Instance>>();
         let instance_buffer = device.create_buffer_init(&BufferInitDescriptor {
@@ -150,6 +175,10 @@ impl WorldPipeline {
                 },
                 BindGroupEntry {
                     binding: 1,
+                    resource: light_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 2,
                     resource: instance_buffer.as_entire_binding(),
                 },
             ],
@@ -220,10 +249,11 @@ impl WorldPipeline {
                 break;
             }
             count += 1;
+            let model_matrix =
+                Mat4::from_scale_rotation_translation(n.scale, n.rotation, n.position);
             instances.push(Instance {
-                _model_matrix: Mat4::from_scale_rotation_translation(
-                    n.scale, n.rotation, n.position,
-                ),
+                _model_matrix: model_matrix,
+                _model_matrix_inversed: model_matrix.inverse().transpose(),
             });
         }
         queue.write_buffer(

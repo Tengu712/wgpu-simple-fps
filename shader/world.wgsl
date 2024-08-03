@@ -6,11 +6,19 @@ struct Camera {
 @binding(0)
 var<uniform> camera: Camera;
 
-struct Instance {
-    model_matrix: mat4x4<f32>,
+struct Light {
+    position: vec4<f32>,
 }
 @group(0)
 @binding(1)
+var<uniform> light: Light;
+
+struct Instance {
+    model_matrix: mat4x4<f32>,
+    model_matrix_it: mat4x4<f32>,
+}
+@group(0)
+@binding(2)
 var<uniform> instances: array<Instance, 4>;
 
 struct VertexInput {
@@ -30,15 +38,13 @@ fn vs_main(
 ) -> VertexOutput {
     var result: VertexOutput;
 
-    result.position =
-        camera.projection_matrix
-        * camera.view_matrix
-        * instances[instance_index].model_matrix
-        * vertex_input.position;
+    let position = instances[instance_index].model_matrix * vertex_input.position;
+    let normal = instances[instance_index].model_matrix_it * vertex_input.normal;
+    let to_light = normalize(light.position.xyz - position.xyz);
+    let c = clamp(dot(normal.xyz, to_light), 0.0, 1.0);
 
-    let c = 1.0 - result.position.z / 40.0;
+    result.position = camera.projection_matrix * camera.view_matrix * position;
     result.color = vec4<f32>(c, c, c, 1.0);
-
     return result;
 }
 
