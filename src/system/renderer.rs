@@ -1,11 +1,12 @@
-mod model;
+pub mod model;
 mod shader;
 mod texture;
 
 use crate::util::{camera::CameraController, instance::InstanceController};
 use futures::executor;
+use model::{Model, ModelId};
 use shader::{skybox::SkyboxPipeline, world::WorldPipeline};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use wgpu::{
     Backends, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, Instance,
     InstanceDescriptor, Limits, MemoryHints, PowerPreference, Queue, RequestAdapterOptions,
@@ -18,7 +19,13 @@ use winit::window::Window;
 pub enum RenderRequest {
     UpdateCamera(CameraController),
     DrawSkybox,
-    DrawWorld(Vec<InstanceController>),
+    /// List the instance information.
+    /// The indices in this array correspond to the indices in the instance buffer.
+    /// If no update is needed, store `None`.
+    UpdateWorldInstances(Vec<Option<InstanceController>>),
+    /// Specify the model id to attach and the start and end index of instances.
+    /// To reduce draw calls, you should group the same models together whenever possible.
+    DrawWorld(Vec<(ModelId, u32, u32)>),
 }
 
 /// A renderer on WebGPU.
@@ -33,6 +40,7 @@ pub struct Renderer<'a> {
     surface_format: TextureFormat,
     skybox_pipeline: SkyboxPipeline,
     world_pipeline: WorldPipeline,
+    models: HashMap<ModelId, Model>,
 }
 
 impl<'a> Renderer<'a> {
@@ -143,6 +151,11 @@ impl<'a> Renderer<'a> {
             window.inner_size().height,
         );
 
+        // create models
+        let mut models = HashMap::new();
+        models.insert(ModelId::Square, Model::square(&device));
+        models.insert(ModelId::Sphere, Model::sphere(&device));
+
         // finish
         info!("Renderer.new", "renderer created.");
         Self {
@@ -153,6 +166,7 @@ impl<'a> Renderer<'a> {
             surface_format,
             skybox_pipeline,
             world_pipeline,
+            models,
         }
     }
 
@@ -207,15 +221,22 @@ impl<'a> Renderer<'a> {
                         .enqueue_update_camera(&self.queue, &camera_controller);
                 }
                 RenderRequest::DrawSkybox => {
-                    self.skybox_pipeline
-                        .draw(&mut command_encoder, &render_target_view);
+                    self.skybox_pipeline.draw(
+                        &mut command_encoder,
+                        &render_target_view,
+                        &self.models[&ModelId::Sphere],
+                    );
                 }
-                RenderRequest::DrawWorld(instance_controllers) => {
+                RenderRequest::UpdateWorldInstances(instance_controllers) => {
+                    self.world_pipeline
+                        .update_instances(&self.queue, instance_controllers);
+                }
+                RenderRequest::DrawWorld(instances) => {
                     self.world_pipeline.draw(
                         &mut command_encoder,
-                        &self.queue,
                         &render_target_view,
-                        instance_controllers,
+                        &self.models,
+                        instances,
                     );
                 }
             }

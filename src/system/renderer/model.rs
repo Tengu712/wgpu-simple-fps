@@ -6,9 +6,6 @@ use wgpu::{
     VertexStepMode,
 };
 
-const SQUARE_OBJ: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/model/square.obj"));
-const SPHERE_OBJ: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/model/sphere.obj"));
-
 /// A struct for the data of a single vertex in the common model within this application’s shader.
 ///
 /// NOTE: You can create custom vertex data to pass to `Model::from()`.
@@ -40,6 +37,16 @@ pub const VERTEX_BUFFER_LAYOUTS: &[VertexBufferLayout] = &[VertexBufferLayout {
         },
     ],
 }];
+
+const SQUARE_OBJ: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/model/square.obj"));
+const SPHERE_OBJ: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/model/sphere.obj"));
+
+/// A enum for model id.
+#[derive(Hash, Eq, PartialEq)]
+pub enum ModelId {
+    Square,
+    Sphere,
+}
 
 /// A struct for a model.
 pub struct Model {
@@ -75,7 +82,7 @@ impl Model {
     /// NOTE: You can call this to create a custom model.
     ///
     /// WARN: Each parameter specified in a face element must be pre-defined in the text.
-    /// 
+    ///
     /// WARN: Only the parameters v, vt, and vn are supported.
     ///       Unsupported parameters will be ignored.
     pub fn from_obj(device: &Device, obj: &str) -> Result<Self, String> {

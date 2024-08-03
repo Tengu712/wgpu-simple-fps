@@ -40,7 +40,6 @@ pub struct SkyboxPipeline {
     depth_texture_view: TextureView,
     camera_buffer: Buffer,
     bind_group_0: BindGroup,
-    model: Model,
 }
 
 impl SkyboxPipeline {
@@ -169,25 +168,22 @@ impl SkyboxPipeline {
             ],
         });
 
-        // create a sphere model
-        let model = Model::sphere(device);
-
         Self {
             render_pipeline,
             depth_texture_view,
             camera_buffer,
             bind_group_0,
-            model,
         }
     }
 
     /// A method to draw a skybox.
     ///
-    /// WARN: It clears render target texture and depth texture.
+    /// WARN: It clears render target texture.
     pub fn draw<'a>(
         &self,
         command_encoder: &'a mut CommandEncoder,
         render_target_view: &TextureView,
+        sphere: &Model,
     ) {
         let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
             label: None,
@@ -212,9 +208,9 @@ impl SkyboxPipeline {
         });
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.bind_group_0, &[]);
-        render_pass.set_vertex_buffer(0, self.model.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.model.index_buffer.slice(..), IndexFormat::Uint16);
-        render_pass.draw_indexed(0..self.model.index_count as u32, 0, 0..1);
+        render_pass.set_vertex_buffer(0, sphere.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(sphere.index_buffer.slice(..), IndexFormat::Uint16);
+        render_pass.draw_indexed(0..sphere.index_count as u32, 0, 0..1);
     }
 
     pub fn enqueue_update_camera(&self, queue: &Queue, camera_controller: &CameraController) {

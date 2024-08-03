@@ -3,9 +3,9 @@ mod wall;
 use crate::{
     system::{
         input::{InputStates, PressingInput},
-        renderer::RenderRequest,
+        renderer::{model::ModelId, RenderRequest},
     },
-    util::camera::CameraController,
+    util::{camera::CameraController, instance::InstanceController},
 };
 use glam::Vec3;
 use wall::Wall;
@@ -13,6 +13,8 @@ use wall::Wall;
 pub struct Game {
     camera_controller: CameraController,
     walls: [Wall; 4],
+    // TODO:
+    flag: bool,
 }
 
 impl Game {
@@ -36,6 +38,7 @@ impl Game {
         Self {
             camera_controller,
             walls,
+            flag: false,
         }
     }
 
@@ -73,12 +76,23 @@ impl Game {
             self.camera_controller.position += velocity;
         }
 
+        // TODO:
+        if !self.flag {
+            self.flag = true;
+            let instance_controllers = self
+                .walls
+                .iter()
+                .map(|n| Some(n.get_instance_controller()))
+                .collect::<Vec<Option<InstanceController>>>();
+            render_requests.push(RenderRequest::UpdateWorldInstances(instance_controllers));
+        }
+
         render_requests.push(RenderRequest::UpdateCamera(self.camera_controller.clone()));
         render_requests.push(RenderRequest::DrawSkybox);
-        let mut instance_controllers = Vec::new();
-        for n in self.walls.iter() {
-            instance_controllers.push(n.get_instance_controller());
-        }
-        render_requests.push(RenderRequest::DrawWorld(instance_controllers));
+        render_requests.push(RenderRequest::DrawWorld(Vec::from([(
+            ModelId::Square,
+            0,
+            self.walls.len() as u32,
+        )])));
     }
 }

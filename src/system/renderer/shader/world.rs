@@ -1,12 +1,12 @@
 use crate::{
     system::renderer::{
-        model::{self, Model},
+        model::{self, Model, ModelId},
         texture::depth,
     },
     util::{camera::CameraController, instance::InstanceController, memory},
 };
 use glam::{Mat4, Vec3, Vec4};
-use std::{borrow::Cow, mem};
+use std::{borrow::Cow, cmp, collections::HashMap, mem};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
@@ -27,6 +27,7 @@ struct Camera {
 struct Light {
     _position: Vec4,
 }
+#[derive(Clone)]
 struct Instance {
     _model_matrix: Mat4,
     _model_matrix_inversed: Mat4,
@@ -41,7 +42,6 @@ pub struct WorldPipeline {
     camera_buffer: Buffer,
     instance_buffer: Buffer,
     bind_group_0: BindGroup,
-    model: Model,
 }
 
 impl WorldPipeline {
@@ -184,33 +184,66 @@ impl WorldPipeline {
             ],
         });
 
-        // create a square model
-        let model = Model::square(device);
-
         Self {
             render_pipeline,
             depth_texture_view,
             camera_buffer,
             instance_buffer,
             bind_group_0,
-            model,
         }
     }
 
-    /// A method to draw squares.
+    /// A method to update instance buffer.
     ///
-    /// It updates @group(0) @binding(0) instance uniform buffer and draws all at one time.
+    /// WARN: Indices exceeding `MAX_INSTANCES_COUNT` will be completely ignored.
+    pub fn update_instances(
+        &self,
+        queue: &Queue,
+        instance_controllers: Vec<Option<InstanceController>>,
+    ) {
+        let mut instances_group = Vec::new();
+        let mut instances = Vec::new();
+        let mut current_i = 0;
+        for (i, n) in instance_controllers.into_iter().enumerate() {
+            if i >= MAX_INSTANCE_COUNT as usize {
+                break;
+            }
+            if let Some(n) = n {
+                if instances.is_empty() {
+                    current_i = i;
+                }
+                let model_matrix =
+                    Mat4::from_scale_rotation_translation(n.scale, n.rotation, n.position);
+                instances.push(Instance {
+                    _model_matrix: model_matrix,
+                    _model_matrix_inversed: model_matrix.inverse().transpose(),
+                });
+            } else if !instances.is_empty() {
+                instances_group.push((current_i, instances.clone()));
+                instances.clear();
+            }
+        }
+        if !instances.is_empty() {
+            instances_group.push((current_i, instances.clone()));
+        }
+        for (i, n) in instances_group {
+            queue.write_buffer(
+                &self.instance_buffer,
+                mem::size_of::<Instance>() as u64 * i as u64,
+                memory::slice_to_u8slice(n.as_slice()),
+            );
+        }
+    }
+
+    /// A method to draw models.
     ///
-    /// WARN: if `model_controllers.len()` is larger than `MAX_INSTANCE_COUNT`,
-    ///       the excess is completely ignored.
-    ///
-    /// OPTIMIZE: Not all instance information changes every frame.
+    /// WARN: Indices exceeding `MAX_INSTANCES_COUNT` will be completely ignored.
     pub fn draw<'a>(
         &self,
         command_encoder: &'a mut CommandEncoder,
-        queue: &Queue,
         render_target_view: &TextureView,
-        instance_controllers: Vec<InstanceController>,
+        models: &HashMap<ModelId, Model>,
+        instances: Vec<(ModelId, u32, u32)>,
     ) {
         // begin render pass
         let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
@@ -238,32 +271,18 @@ impl WorldPipeline {
         // prepare
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.bind_group_0, &[]);
-        render_pass.set_vertex_buffer(0, self.model.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.model.index_buffer.slice(..), IndexFormat::Uint16);
-
-        // update instance uniform buffer
-        let mut count = 0;
-        let mut instances = Vec::new();
-        for n in instance_controllers {
-            if count >= MAX_INSTANCE_COUNT {
-                break;
-            }
-            count += 1;
-            let model_matrix =
-                Mat4::from_scale_rotation_translation(n.scale, n.rotation, n.position);
-            instances.push(Instance {
-                _model_matrix: model_matrix,
-                _model_matrix_inversed: model_matrix.inverse().transpose(),
-            });
-        }
-        queue.write_buffer(
-            &self.instance_buffer,
-            0,
-            memory::slice_to_u8slice(instances.as_slice()),
-        );
 
         // draw
-        render_pass.draw_indexed(0..self.model.index_count as u32, 0, 0..count as u32);
+        for (name, start, end) in instances {
+            if start >= MAX_INSTANCE_COUNT as u32 {
+                continue;
+            }
+            let end = cmp::min(MAX_INSTANCE_COUNT as u32, end);
+            let model = &models[&name];
+            render_pass.set_vertex_buffer(0, model.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(model.index_buffer.slice(..), IndexFormat::Uint16);
+            render_pass.draw_indexed(0..model.index_count as u32, 0, start..end);
+        }
     }
 
     pub fn enqueue_update_camera(&self, queue: &Queue, camera_controller: &CameraController) {
