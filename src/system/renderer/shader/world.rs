@@ -156,7 +156,7 @@ impl WorldPipeline {
         });
 
         // create a square model
-        let model = Model::rectangle(device, 1.0, 1.0);
+        let model = Model::square(device);
 
         Self {
             render_pipeline,

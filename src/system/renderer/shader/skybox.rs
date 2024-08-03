@@ -170,7 +170,7 @@ impl SkyboxPipeline {
         });
 
         // create a sphere model
-        let model = Model::sphere(device, 50.0, 20, 20);
+        let model = Model::sphere(device);
 
         Self {
             render_pipeline,
