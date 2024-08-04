@@ -5,7 +5,7 @@ mod texture;
 use crate::util::{camera::CameraController, instance::InstanceController};
 use futures::executor;
 use model::{Model, ModelId};
-use shader::{skybox::SkyboxPipeline, world::WorldPipeline};
+use shader::{skybox::SkyboxPipeline, ui::UiPipeline, world::WorldPipeline};
 use std::{collections::HashMap, sync::Arc};
 use wgpu::{
     Backends, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, Instance,
@@ -26,6 +26,13 @@ pub enum RenderRequest {
     /// Specify the model id to attach and the start and end index of instances.
     /// To reduce draw calls, you should group the same models together whenever possible.
     DrawWorld(Vec<(ModelId, u32, u32)>),
+    /// List the instance information.
+    /// The indices in this array correspond to the indices in the instance buffer.
+    /// If no update is needed, store `None`.
+    UpdateUiInstances(Vec<Option<InstanceController>>),
+    /// Specify the start and end index of instances.
+    /// To reduce draw calls, you should group the same models together whenever possible.
+    DrawUi(Vec<(u32, u32)>),
 }
 
 /// A renderer on WebGPU.
@@ -40,6 +47,7 @@ pub struct Renderer<'a> {
     surface_format: TextureFormat,
     skybox_pipeline: SkyboxPipeline,
     world_pipeline: WorldPipeline,
+    ui_pipeline: UiPipeline,
     models: HashMap<ModelId, Model>,
 }
 
@@ -150,6 +158,12 @@ impl<'a> Renderer<'a> {
             window.inner_size().width,
             window.inner_size().height,
         );
+        let ui_pipeline = UiPipeline::new(
+            &device,
+            surface_format.into(),
+            window.inner_size().width,
+            window.inner_size().height,
+        );
 
         // create models
         let mut models = HashMap::new();
@@ -167,6 +181,7 @@ impl<'a> Renderer<'a> {
             surface_format,
             skybox_pipeline,
             world_pipeline,
+            ui_pipeline,
             models,
         }
     }
@@ -188,7 +203,8 @@ impl<'a> Renderer<'a> {
         );
         self.skybox_pipeline.resize(&self.device, width, height);
         self.world_pipeline.resize(&self.device, width, height);
-        info!("Renderer.resize", "textures resized: {}x{}.", width, height);
+        self.ui_pipeline.resize(&self.queue, width, height);
+        info!("Renderer.resize", "resized: {}x{}.", width, height);
     }
 
     /// A method to render entities.
@@ -237,6 +253,18 @@ impl<'a> Renderer<'a> {
                         &mut command_encoder,
                         &render_target_view,
                         &self.models,
+                        instances,
+                    );
+                }
+                RenderRequest::UpdateUiInstances(instance_controllers) => {
+                    self.ui_pipeline
+                        .update_instances(&self.queue, instance_controllers);
+                }
+                RenderRequest::DrawUi(instances) => {
+                    self.ui_pipeline.draw(
+                        &mut command_encoder,
+                        &render_target_view,
+                        &self.models[&ModelId::Square],
                         instances,
                     );
                 }

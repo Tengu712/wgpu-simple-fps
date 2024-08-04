@@ -130,6 +130,10 @@ impl Game {
                 .collect::<Vec<Option<InstanceController>>>();
             instance_controllers.push(Some(self.floor.get_instance_controller()));
             render_requests.push(RenderRequest::UpdateWorldInstances(instance_controllers));
+            let mut i = InstanceController::default();
+            i.scale.x = 10.0;
+            i.scale.y = 10.0;
+            render_requests.push(RenderRequest::UpdateUiInstances(Vec::from([Some(i)])));
         }
 
         render_requests.push(RenderRequest::UpdateCamera(self.camera_controller.clone()));
@@ -139,5 +143,6 @@ impl Game {
             0,
             self.walls.len() as u32 + 1,
         )])));
+        render_requests.push(RenderRequest::DrawUi(Vec::from([(0, 1)])));
     }
 }
