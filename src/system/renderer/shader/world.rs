@@ -25,7 +25,7 @@ struct Camera {
     _view_matrix: Mat4,
 }
 struct Light {
-    _position: Vec4,
+    _direction: Vec4,
 }
 #[derive(Clone)]
 struct Instance {
@@ -141,12 +141,13 @@ impl WorldPipeline {
         });
 
         // create a light uniform buffer
-        const LIGHT: Light = Light {
-            _position: Vec4::new(-50.0, 100.0, -50.0, 1.0),
+        let light = Vec3::new(2.0, -10.0, 5.0).normalize();
+        let light = Light {
+            _direction: Vec4::new(light.x, light.y, light.z, 1.0),
         };
         let light_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: memory::anything_to_u8slice(&LIGHT),
+            contents: memory::anything_to_u8slice(&light),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 

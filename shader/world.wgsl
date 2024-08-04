@@ -7,7 +7,7 @@ struct Camera {
 var<uniform> camera: Camera;
 
 struct Light {
-    position: vec4<f32>,
+    direction: vec4<f32>,
 }
 @group(0)
 @binding(1)
@@ -42,8 +42,7 @@ fn vs_main(
     let normal = instances[instance_index].model_matrix_it * vertex_input.normal;
 
     let normal3d = normalize(normal.xyz);
-    let to_light = normalize(light.position.xyz - position.xyz);
-    let c = clamp(dot(normal3d, to_light), 0.0, 1.0);
+    let c = 0.1 + 0.9 * clamp(dot(normal3d, -light.direction.xyz), 0.0, 1.0);
 
     result.position = camera.projection_matrix * camera.view_matrix * position;
     result.color = vec4<f32>(c, c, c, 1.0);
