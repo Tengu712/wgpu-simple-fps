@@ -14,7 +14,7 @@ mod game;
 mod system;
 mod util;
 
-use game::Game;
+use game::scene::SceneManager;
 use std::{error::Error, process, sync::Arc};
 use system::{input::InputManager, renderer::Renderer};
 use winit::{
@@ -39,12 +39,11 @@ fn set_cursor_center(window: &Arc<Window>) -> (f64, f64) {
     (x, y)
 }
 
-#[derive(Default)]
 struct Application<'a> {
     window: Option<Arc<Window>>,
     renderer: Option<Renderer<'a>>,
-    input_manager: Option<InputManager>,
-    game: Option<Game>,
+    input_manager: InputManager,
+    scene_manager: SceneManager,
 }
 
 impl<'a> ApplicationHandler for Application<'a> {
@@ -93,10 +92,19 @@ impl<'a> ApplicationHandler for Application<'a> {
         }
         info!("Application.resumed", "window created.");
 
-        // create objects
+        // create a renderer
         let renderer = Renderer::new(window.clone());
-        let input_manager = InputManager::new(set_cursor_center(&window));
-        let game = Game::new(
+
+        // move cursor center
+        self.input_manager
+            .set_cursor_position(set_cursor_center(&window));
+
+        // move on to title scene and resize
+        self.scene_manager.on_window_created(
+            window.inner_size().width as f32,
+            window.inner_size().height as f32,
+        );
+        self.scene_manager.resize(
             window.inner_size().width as f32,
             window.inner_size().height as f32,
         );
@@ -105,8 +113,6 @@ impl<'a> ApplicationHandler for Application<'a> {
         info!("Application.resumed", "initialization done.");
         self.window = Some(window);
         self.renderer = Some(renderer);
-        self.input_manager = Some(input_manager);
-        self.game = Some(game);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
@@ -120,10 +126,7 @@ impl<'a> ApplicationHandler for Application<'a> {
             WindowEvent::Destroyed => event_loop.exit(),
             WindowEvent::Resized(PhysicalSize { width, height }) => {
                 self.renderer.as_mut().unwrap().resize(width, height);
-                self.game
-                    .as_mut()
-                    .unwrap()
-                    .resize(width as f32, height as f32);
+                self.scene_manager.resize(width as f32, height as f32);
             }
             WindowEvent::KeyboardInput {
                 device_id: _,
@@ -133,31 +136,22 @@ impl<'a> ApplicationHandler for Application<'a> {
                 if event.physical_key == KeyCode::Escape {
                     event_loop.exit();
                 }
-                self.input_manager.as_mut().unwrap().update_key_state(event);
+                self.input_manager.update_key_state(event);
             }
             WindowEvent::MouseInput {
                 device_id: _,
                 state,
                 button,
             } => {
-                self.input_manager
-                    .as_mut()
-                    .unwrap()
-                    .update_mouse_state(button, state);
+                self.input_manager.update_mouse_state(button, state);
             }
             WindowEvent::CursorMoved {
                 device_id: _,
                 position,
             } => {
-                self.input_manager
-                    .as_mut()
-                    .unwrap()
-                    .update_cursor_state(position);
+                self.input_manager.update_cursor_state(position);
                 let cursor_position = set_cursor_center(self.window.as_ref().unwrap());
-                self.input_manager
-                    .as_mut()
-                    .unwrap()
-                    .set_cursor_position(cursor_position);
+                self.input_manager.set_cursor_position(cursor_position);
             }
             _ => (),
         }
@@ -169,15 +163,12 @@ impl<'a> ApplicationHandler for Application<'a> {
             return;
         }
 
-        let input_states = self.input_manager.as_ref().unwrap().get();
         let mut render_requests = Vec::new();
 
-        self.game
-            .as_mut()
-            .unwrap()
-            .update(input_states, &mut render_requests);
+        self.scene_manager
+            .update(self.input_manager.get(), &mut render_requests);
 
-        self.input_manager.as_mut().unwrap().clean();
+        self.input_manager.clean();
         self.renderer.as_ref().unwrap().render(render_requests);
     }
 }
@@ -185,7 +176,12 @@ impl<'a> ApplicationHandler for Application<'a> {
 fn run() -> Result<(), Box<dyn Error>> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
-    event_loop.run_app(&mut Application::default())?;
+    event_loop.run_app(&mut Application {
+        window: None,
+        renderer: None,
+        input_manager: InputManager::new((0.0, 0.0)),
+        scene_manager: SceneManager::new(),
+    })?;
     Ok(())
 }
 
