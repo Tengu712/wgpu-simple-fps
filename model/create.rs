@@ -1,4 +1,5 @@
 //! A program to create follwing models as Wavefront OBJ:
+//! - cube
 //! - sphere
 //! - rectangle
 //!
