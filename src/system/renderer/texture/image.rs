@@ -9,7 +9,7 @@ use wgpu::{
 
 /// A function to create an image texture view.
 ///
-/// WARN: It pushes write_texture command into the queue and submits the queue.
+/// WARN: It enqueues `write_texture` queue to `queue` and submits it.
 pub fn create_image_texture_view(
     device: &Device,
     queue: &Queue,

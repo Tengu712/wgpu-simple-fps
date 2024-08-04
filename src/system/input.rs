@@ -57,7 +57,6 @@ pub struct InputManager {
 }
 impl InputManager {
     pub fn new(cursor_position: (f64, f64)) -> Self {
-        info!("InputManager.new", "input manager created.");
         Self {
             states: InputStates::default(),
             cursor_position,

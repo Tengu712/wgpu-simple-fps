@@ -3,7 +3,7 @@ use crate::{
         model::{self, Model, ModelId},
         texture::depth,
     },
-    util::{camera::CameraController, instance::InstanceController, memory},
+    util::{camera::CameraController, instance::InstanceController, memory, vector},
 };
 use glam::{Mat4, Vec3, Vec4};
 use std::{borrow::Cow, cmp, collections::HashMap, mem};
@@ -209,31 +209,17 @@ impl WorldPipeline {
         queue: &Queue,
         instance_controllers: Vec<Option<InstanceController>>,
     ) {
-        let mut instances_group = Vec::new();
-        let mut instances = Vec::new();
-        let mut current_i = 0;
-        for (i, n) in instance_controllers.into_iter().enumerate() {
-            if i >= MAX_INSTANCE_COUNT as usize {
-                break;
-            }
-            if let Some(n) = n {
-                if instances.is_empty() {
-                    current_i = i;
-                }
+        let instances_group = vector::get_consecutive_somes(
+            vector::get_upto(&instance_controllers, MAX_INSTANCE_COUNT as usize),
+            |n| {
                 let model_matrix =
                     Mat4::from_scale_rotation_translation(n.scale, n.rotation, n.position);
-                instances.push(Instance {
+                Instance {
                     _model_matrix: model_matrix,
                     _model_matrix_inversed: model_matrix.inverse().transpose(),
-                });
-            } else if !instances.is_empty() {
-                instances_group.push((current_i, instances.clone()));
-                instances.clear();
-            }
-        }
-        if !instances.is_empty() {
-            instances_group.push((current_i, instances.clone()));
-        }
+                }
+            },
+        );
         for (i, n) in instances_group {
             queue.write_buffer(
                 &self.instance_buffer,

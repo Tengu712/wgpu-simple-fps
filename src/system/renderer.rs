@@ -37,7 +37,7 @@ pub enum RenderRequest {
 
 /// A renderer on WebGPU.
 ///
-/// It's depends on winit window.
+/// It's depends on a winit window.
 /// The lifetime `'a` refers to the surface's lifetime, which is the same as the window's.
 pub struct Renderer<'a> {
     surface: Surface<'a>,
@@ -186,7 +186,7 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    /// A method to resize the size of textures.
+    /// A method to resize something that depends on the window size.
     pub fn resize(&mut self, width: u32, height: u32) {
         self.surface.configure(
             &self.device,
@@ -204,7 +204,6 @@ impl<'a> Renderer<'a> {
         self.skybox_pipeline.resize(&self.device, width, height);
         self.world_pipeline.resize(&self.device, width, height);
         self.ui_pipeline.resize(&self.queue, width, height);
-        info!("Renderer.resize", "resized: {}x{}.", width, height);
     }
 
     /// A method to render entities.
@@ -235,7 +234,7 @@ impl<'a> Renderer<'a> {
                     self.world_pipeline
                         .update_camera(&self.queue, &camera_controller);
                     self.skybox_pipeline
-                        .enqueue_update_camera(&self.queue, &camera_controller);
+                        .update_camera(&self.queue, &camera_controller);
                 }
                 RenderRequest::DrawSkybox => {
                     self.skybox_pipeline.draw(

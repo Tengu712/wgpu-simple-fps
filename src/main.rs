@@ -127,6 +127,7 @@ impl<'a> ApplicationHandler for Application<'a> {
             WindowEvent::Resized(PhysicalSize { width, height }) => {
                 self.renderer.as_mut().unwrap().resize(width, height);
                 self.scene_manager.resize(width as f32, height as f32);
+                info!("Application.window_event", "resized: {}x{}.", width, height);
             }
             WindowEvent::KeyboardInput {
                 device_id: _,

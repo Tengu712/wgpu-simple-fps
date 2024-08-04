@@ -27,13 +27,6 @@ struct Camera {
     _view_matrix: Mat4,
 }
 
-const CLEAR_COLOR: Color = Color {
-    r: 0.0,
-    g: 0.0,
-    b: 0.0,
-    a: 1.0,
-};
-
 /// A pipeline implementaion of world.wgsl.
 pub struct SkyboxPipeline {
     render_pipeline: RenderPipeline,
@@ -43,6 +36,9 @@ pub struct SkyboxPipeline {
 }
 
 impl SkyboxPipeline {
+    /// A constructor.
+    ///
+    /// NOTE: It needs a queue to create an image texture.
     pub fn new(
         device: &Device,
         queue: &Queue,
@@ -178,7 +174,7 @@ impl SkyboxPipeline {
 
     /// A method to draw a skybox.
     ///
-    /// WARN: It clears render target texture.
+    /// WARN: It clears render target texture with black.
     pub fn draw<'a>(
         &self,
         command_encoder: &'a mut CommandEncoder,
@@ -191,7 +187,12 @@ impl SkyboxPipeline {
                 view: render_target_view,
                 resolve_target: None,
                 ops: Operations {
-                    load: LoadOp::Clear(CLEAR_COLOR),
+                    load: LoadOp::Clear(Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 1.0,
+                    }),
                     store: StoreOp::Store,
                 },
             })],
@@ -213,7 +214,10 @@ impl SkyboxPipeline {
         render_pass.draw_indexed(0..sphere.index_count as u32, 0, 0..1);
     }
 
-    pub fn enqueue_update_camera(&self, queue: &Queue, camera_controller: &CameraController) {
+    /// A method to update the camera uniform buffer.
+    ///
+    /// It enqueues a `write_buffer` queue to `queue`.
+    pub fn update_camera(&self, queue: &Queue, camera_controller: &CameraController) {
         let camera = Camera {
             _projection_matrix: Mat4::perspective_lh(
                 camera_controller.pov,
@@ -234,6 +238,7 @@ impl SkyboxPipeline {
         queue.write_buffer(&self.camera_buffer, 0, memory::anything_to_u8slice(&camera));
     }
 
+    /// A method to recreate and resize the depth texture.
     pub fn resize(&mut self, device: &Device, width: u32, height: u32) {
         self.depth_texture_view = depth::create_depth_texture_view(device, width, height);
     }

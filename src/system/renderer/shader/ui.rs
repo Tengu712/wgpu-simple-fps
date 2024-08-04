@@ -1,6 +1,6 @@
 use crate::{
     system::renderer::model::{self, Model},
-    util::{instance::InstanceController, memory},
+    util::{instance::InstanceController, memory, vector},
 };
 use glam::Mat4;
 use std::{borrow::Cow, cmp, mem};
@@ -180,30 +180,14 @@ impl UiPipeline {
         queue: &Queue,
         instance_controllers: Vec<Option<InstanceController>>,
     ) {
-        let mut instances_group = Vec::new();
-        let mut instances = Vec::new();
-        let mut current_i = 0;
-        for (i, n) in instance_controllers.into_iter().enumerate() {
-            if i >= MAX_INSTANCE_COUNT as usize {
-                break;
-            }
-            if let Some(n) = n {
-                if instances.is_empty() {
-                    current_i = i;
-                }
-                instances.push(Instance {
-                    _model_matrix: Mat4::from_scale_rotation_translation(
-                        n.scale, n.rotation, n.position,
-                    ),
-                });
-            } else if !instances.is_empty() {
-                instances_group.push((current_i, instances.clone()));
-                instances.clear();
-            }
-        }
-        if !instances.is_empty() {
-            instances_group.push((current_i, instances.clone()));
-        }
+        let instances_group = vector::get_consecutive_somes(
+            vector::get_upto(&instance_controllers, MAX_INSTANCE_COUNT as usize),
+            |n| Instance {
+                _model_matrix: Mat4::from_scale_rotation_translation(
+                    n.scale, n.rotation, n.position,
+                ),
+            },
+        );
         for (i, n) in instances_group {
             queue.write_buffer(
                 &self.instance_buffer,
