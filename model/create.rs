@@ -113,7 +113,7 @@ fn create_sphere(
     longtitude_count: usize,
 ) -> (Vec<Vertex>, Vec<u16>) {
     if latitude_count % 2 == 1 {
-        panic!("tried to divide a sphere into an even number of sections along the latitude.");
+        panic!("tried to divide a sphere into an odd number of sections along the latitude.");
     }
 
     // vertex data
@@ -159,6 +159,113 @@ fn create_sphere(
         index_data.push((i % longtitude_count) + 1 + offset);
     }
 
+    (vertex_data, index_data)
+}
+
+fn multiply_matrix_vector(m: [[f32; 3]; 3], v: [f32; 3]) -> [f32; 3] {
+    let r = (0..3)
+        .into_iter()
+        .map(|i| m[i][0] * v[0] + m[i][1] * v[1] + m[i][2] * v[2])
+        .map(|n| (n * 10.0).round() / 10.0)
+        .collect::<Vec<f32>>();
+    [r[0], r[1], r[2]]
+}
+fn rotate_around_x(theta: f32, v: [f32; 3]) -> [f32; 3] {
+    let m = [
+        [1.0, 0.0, 0.0],
+        [0.0, theta.cos(), theta.sin()],
+        [0.0, -theta.sin(), theta.cos()],
+    ];
+    multiply_matrix_vector(m, v)
+}
+fn rotate_around_y(theta: f32, v: [f32; 3]) -> [f32; 3] {
+    let m = [
+        [theta.cos(), 0.0, -theta.sin()],
+        [0.0, 1.0, 0.0],
+        [theta.sin(), 0.0, theta.cos()],
+    ];
+    multiply_matrix_vector(m, v)
+}
+fn scale(x: f32, y: f32, z: f32, v: [f32; 3]) -> [f32; 3] {
+    [v[0] * x, v[1] * y, v[2] * z]
+}
+
+/// A method to create a cuboid model.
+/// 
+/// When viewed from the outside, the vertices of all faces are connected in a clockwise order.
+/// 
+/// The texture coordinates of all faces is the same as that of a rectangle.
+fn create_cuboid(width: f32, height: f32, depth: f32) -> (Vec<Vertex>, Vec<u16>) {
+    let hw = width / 2.0;
+    let hh = height / 2.0;
+    let hd = depth / 2.0;
+
+    // vertex data
+    let mut vertex_data = Vec::new();
+    let rot = [
+        [0.0, 0.0],
+        [90.0f32.to_radians(), 0.0],
+        [90.0f32.to_radians(), 90.0f32.to_radians()],
+        [90.0f32.to_radians(), 180.0f32.to_radians()],
+        [90.0f32.to_radians(), 270.0f32.to_radians()],
+        [180.0f32.to_radians(), 0.0],
+    ];
+    for i in 0..6 {
+        vertex_data.push(Vertex {
+            p: scale(
+                hw,
+                hh,
+                hd,
+                rotate_around_y(rot[i][1], rotate_around_x(rot[i][0], [-1.0, 1.0, -1.0])),
+            ),
+            n: rotate_around_y(rot[i][1], rotate_around_x(rot[i][0], [0.0, 1.0, 0.0])),
+            t: [0.0, 1.0],
+        });
+        vertex_data.push(Vertex {
+            p: scale(
+                hw,
+                hh,
+                hd,
+                rotate_around_y(rot[i][1], rotate_around_x(rot[i][0], [-1.0, 1.0, 1.0])),
+            ),
+            n: rotate_around_y(rot[i][1], rotate_around_x(rot[i][0], [0.0, 1.0, 0.0])),
+            t: [0.0, 0.0],
+        });
+        vertex_data.push(Vertex {
+            p: scale(
+                hw,
+                hh,
+                hd,
+                rotate_around_y(rot[i][1], rotate_around_x(rot[i][0], [1.0, 1.0, 1.0])),
+            ),
+            n: rotate_around_y(rot[i][1], rotate_around_x(rot[i][0], [0.0, 1.0, 0.0])),
+            t: [1.0, 0.0],
+        });
+        vertex_data.push(Vertex {
+            p: scale(
+                hw,
+                hh,
+                hd,
+                rotate_around_y(rot[i][1], rotate_around_x(rot[i][0], [1.0, 1.0, -1.0])),
+            ),
+            n: rotate_around_y(rot[i][1], rotate_around_x(rot[i][0], [0.0, 1.0, 0.0])),
+            t: [1.0, 1.0],
+        })
+    }
+
+    // index data
+    let mut index_data = Vec::new();
+    for i in 0..6 {
+        let offset = i * 4;
+        index_data.push(offset);
+        index_data.push(offset + 1);
+        index_data.push(offset + 2);
+        index_data.push(offset);
+        index_data.push(offset + 2);
+        index_data.push(offset + 3);
+    }
+
+    // finish
     (vertex_data, index_data)
 }
 
@@ -226,6 +333,7 @@ fn create_file(name: &str, data: (Vec<Vertex>, Vec<u16>)) {
 }
 
 fn main() {
+    create_file("cube.obj", create_cuboid(1.0, 1.0, 1.0));
     create_file("square.obj", create_rectangle(1.0, 1.0));
-    create_file("sphere.obj", create_sphere(50.0, 20, 20));
+    create_file("sphere.obj", create_sphere(1.0, 20, 20));
 }

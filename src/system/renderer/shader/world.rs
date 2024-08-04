@@ -33,7 +33,7 @@ struct Instance {
     _model_matrix_inversed: Mat4,
 }
 
-const MAX_INSTANCE_COUNT: u64 = 4;
+const MAX_INSTANCE_COUNT: u64 = 16;
 
 /// A pipeline implementaion of world.wgsl.
 pub struct WorldPipeline {
@@ -142,7 +142,7 @@ impl WorldPipeline {
 
         // create a light uniform buffer
         const LIGHT: Light = Light {
-            _position: Vec4::new(1.0, 10.0, -10.0, 1.0),
+            _position: Vec4::new(-50.0, 100.0, -50.0, 1.0),
         };
         let light_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,

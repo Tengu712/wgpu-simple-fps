@@ -23,10 +23,6 @@ fn get_intersection(p11: Vec2, p12: Vec2, p21: Vec2, p22: Vec2) -> Option<Vec2> 
 }
 
 /// A wall entity on the world.
-///
-/// - y location is 1.0
-/// - y width is 2.0
-/// - z width is 1.0
 pub struct Wall {
     instance_controller: InstanceController,
     vertices: [Vec2; 5],
@@ -36,34 +32,34 @@ pub struct Wall {
 impl Wall {
     /// A constructor.
     ///
-    /// * `x` - the x location of the center point
-    /// * `z` - the z location of the center point
-    /// * `rot` - the rotation angle (rad) around y-axis
-    /// * `width` - the scale in the x-axis direction
-    pub fn new(x: f32, z: f32, rot: f32, width: f32) -> Self {
+    /// * `position` - the position of the center point
+    /// * `rotation` - the rotation angle (rad) around y-axis
+    /// * `scale` - the scale in the x-axis direction
+    pub fn new(position: Vec3, rotation: f32, scale: Vec3) -> Self {
         // instance controller
         let mut instance_controller = InstanceController::default();
-        instance_controller.position = Vec3::new(x, 1.0, z);
-        instance_controller.rotation = Quat::from_rotation_y(rot);
-        instance_controller.scale = Vec3::new(width, 2.0, 1.0);
+        instance_controller.position = position;
+        instance_controller.rotation = Quat::from_rotation_y(rotation);
+        instance_controller.scale = scale;
 
         // vertices and edges
-        let half_width = width / 2.0;
+        let hw = (scale.x / 2.0) + 1.0;
+        let hd = (scale.z / 2.0) + 1.0;
         let a = instance_controller
             .rotation
-            .mul_vec3(Vec3::new(-half_width, 0.0, -1.0))
+            .mul_vec3(Vec3::new(-hw, 0.0, -hd))
             + instance_controller.position;
         let b = instance_controller
             .rotation
-            .mul_vec3(Vec3::new(half_width, 0.0, -1.0))
+            .mul_vec3(Vec3::new(hw, 0.0, -hd))
             + instance_controller.position;
         let c = instance_controller
             .rotation
-            .mul_vec3(Vec3::new(half_width, 0.0, 1.0))
+            .mul_vec3(Vec3::new(hw, 0.0, hd))
             + instance_controller.position;
         let d = instance_controller
             .rotation
-            .mul_vec3(Vec3::new(-half_width, 0.0, 1.0))
+            .mul_vec3(Vec3::new(-hw, 0.0, hd))
             + instance_controller.position;
         let vertices = [a.xz(), b.xz(), c.xz(), d.xz(), a.xz()];
         let edges = [

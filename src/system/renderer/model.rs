@@ -38,12 +38,14 @@ pub const VERTEX_BUFFER_LAYOUTS: &[VertexBufferLayout] = &[VertexBufferLayout {
     ],
 }];
 
+const CUBE_OBJ: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/model/cube.obj"));
 const SQUARE_OBJ: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/model/square.obj"));
 const SPHERE_OBJ: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/model/sphere.obj"));
 
 /// A enum for model id.
 #[derive(Hash, Eq, PartialEq)]
 pub enum ModelId {
+    Cube,
     Square,
     Sphere,
 }
@@ -133,6 +135,11 @@ impl Model {
             }
         }
         Ok(Self::from(device, &vertex_data, &index_data))
+    }
+
+    /// A static method to create a cube model.
+    pub fn cube(device: &Device) -> Self {
+        Self::from_obj(device, CUBE_OBJ).unwrap()
     }
 
     /// A static method to create a square model.

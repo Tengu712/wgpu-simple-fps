@@ -153,6 +153,7 @@ impl<'a> Renderer<'a> {
 
         // create models
         let mut models = HashMap::new();
+        models.insert(ModelId::Cube, Model::cube(&device));
         models.insert(ModelId::Square, Model::square(&device));
         models.insert(ModelId::Sphere, Model::sphere(&device));
 

@@ -19,7 +19,7 @@ struct Instance {
 }
 @group(0)
 @binding(2)
-var<uniform> instances: array<Instance, 4>;
+var<uniform> instances: array<Instance, 16>;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
@@ -40,8 +40,10 @@ fn vs_main(
 
     let position = instances[instance_index].model_matrix * vertex_input.position;
     let normal = instances[instance_index].model_matrix_it * vertex_input.normal;
+
+    let normal3d = normalize(normal.xyz);
     let to_light = normalize(light.position.xyz - position.xyz);
-    let c = clamp(dot(normal.xyz, to_light), 0.0, 1.0);
+    let c = clamp(dot(normal3d, to_light), 0.0, 1.0);
 
     result.position = camera.projection_matrix * camera.view_matrix * position;
     result.color = vec4<f32>(c, c, c, 1.0);

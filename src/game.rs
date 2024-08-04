@@ -1,3 +1,4 @@
+mod floor;
 mod wall;
 
 use crate::{
@@ -7,12 +8,14 @@ use crate::{
     },
     util::{camera::CameraController, instance::InstanceController},
 };
+use floor::Floor;
 use glam::Vec3;
 use wall::Wall;
 
 pub struct Game {
     camera_controller: CameraController,
-    walls: [Wall; 4],
+    floor: Floor,
+    walls: [Wall; 8],
     // TODO:
     flag: bool,
 }
@@ -23,20 +26,61 @@ impl Game {
         let mut camera_controller = CameraController::default();
         camera_controller.width = width;
         camera_controller.height = height;
-        camera_controller.position.y = 1.0;
+        camera_controller.position.y = 1.5;
+        camera_controller.position.z = -35.0;
 
-        // create walls
+        // create entities
+        let floor = Floor::new(40.0, 80.0);
         let walls = [
-            Wall::new(0.0, 20.0, 0.0, 40.0),
-            Wall::new(0.0, -20.0, 180.0f32.to_radians(), 40.0),
-            Wall::new(20.0, 0.0, 90.0f32.to_radians(), 40.0),
-            Wall::new(-20.0, 0.0, -90.0f32.to_radians(), 40.0),
+            // outer
+            Wall::new(
+                Vec3::new(0.0, 4.0, 40.0),
+                0.0f32.to_radians(),
+                Vec3::new(40.0, 8.0, 1.0),
+            ),
+            Wall::new(
+                Vec3::new(0.0, 4.0, -40.0),
+                180.0f32.to_radians(),
+                Vec3::new(40.0, 8.0, 1.0),
+            ),
+            Wall::new(
+                Vec3::new(20.0, 4.0, 0.0),
+                90.0f32.to_radians(),
+                Vec3::new(80.0, 8.0, 1.0),
+            ),
+            Wall::new(
+                Vec3::new(-20.0, 4.0, 0.0),
+                -90.0f32.to_radians(),
+                Vec3::new(80.0, 8.0, 1.0),
+            ),
+            // inner
+            Wall::new(
+                Vec3::new(-2.0, 1.5, -20.0),
+                0.0f32.to_radians(),
+                Vec3::new(36.0, 3.0, 1.0),
+            ),
+            Wall::new(
+                Vec3::new(2.0, 1.5, 20.0),
+                0.0f32.to_radians(),
+                Vec3::new(36.0, 3.0, 1.0),
+            ),
+            Wall::new(
+                Vec3::new(11.0, 3.5, 0.0),
+                0.0f32.to_radians(),
+                Vec3::new(18.0, 7.0, 1.0),
+            ),
+            Wall::new(
+                Vec3::new(-11.0, 3.5, 0.0),
+                0.0f32.to_radians(),
+                Vec3::new(18.0, 7.0, 1.0),
+            ),
         ];
 
         // finish
         info!("Game.new", "game created.");
         Self {
             camera_controller,
+            floor,
             walls,
             flag: false,
         }
@@ -65,7 +109,7 @@ impl Game {
             // create a correct velocity
             let mut velocity = self
                 .camera_controller
-                .align_to_direction(Vec3::new(rl as f32, 0.0, fb as f32).normalize() * 0.2);
+                .align_to_direction(Vec3::new(rl as f32, 0.0, fb as f32).normalize() * 0.25);
 
             // check wall collisions
             for n in self.walls.iter() {
@@ -79,20 +123,21 @@ impl Game {
         // TODO:
         if !self.flag {
             self.flag = true;
-            let instance_controllers = self
+            let mut instance_controllers = self
                 .walls
                 .iter()
                 .map(|n| Some(n.get_instance_controller()))
                 .collect::<Vec<Option<InstanceController>>>();
+            instance_controllers.push(Some(self.floor.get_instance_controller()));
             render_requests.push(RenderRequest::UpdateWorldInstances(instance_controllers));
         }
 
         render_requests.push(RenderRequest::UpdateCamera(self.camera_controller.clone()));
         render_requests.push(RenderRequest::DrawSkybox);
         render_requests.push(RenderRequest::DrawWorld(Vec::from([(
-            ModelId::Square,
+            ModelId::Cube,
             0,
-            self.walls.len() as u32,
+            self.walls.len() as u32 + 1,
         )])));
     }
 }
