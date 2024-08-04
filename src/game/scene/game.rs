@@ -3,7 +3,7 @@ use crate::{
     game::entity::{floor::Floor, wall::Wall},
     system::{
         input::{InputStates, PressingInput},
-        renderer::{model::ModelId, RenderRequest},
+        renderer::{model::ModelId, shader::world::DrawWorldDescriptor, RenderRequest},
     },
     util::{camera::CameraController, instance::InstanceController},
 };
@@ -141,12 +141,9 @@ impl GameSceneState {
 
         render_requests.push(RenderRequest::UpdateCamera(self.camera_controller.clone()));
         render_requests.push(RenderRequest::DrawSkybox);
-        render_requests.push(RenderRequest::DrawWorld(Vec::from([(
-            ModelId::Cube,
-            0,
-            self.walls.len() as u32 + 1,
-        )])));
-        render_requests.push(RenderRequest::DrawUi(Vec::from([(0, 1)])));
+        render_requests.push(RenderRequest::DrawWorld(DrawWorldDescriptor {
+            instance_indices: Vec::from([(ModelId::Cube, 0, self.walls.len() as u32 + 1)]),
+        }));
 
         None
     }

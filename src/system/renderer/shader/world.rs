@@ -32,8 +32,14 @@ struct Instance {
     _model_matrix: Mat4,
     _model_matrix_inversed: Mat4,
 }
-
 const MAX_INSTANCE_COUNT: u64 = 16;
+
+/// A struct for descripting the detail of a draw request on an world pipeline.
+pub struct DrawWorldDescriptor {
+    /// Specify the model id to attach and the start and end index of instances.
+    /// To reduce draw calls, you should group the same models together whenever possible.
+    pub instance_indices: Vec<(ModelId, u32, u32)>,
+}
 
 /// A pipeline implementaion of world.wgsl.
 pub struct WorldPipeline {
@@ -45,6 +51,7 @@ pub struct WorldPipeline {
 }
 
 impl WorldPipeline {
+    /// A constructor.
     pub fn new(
         device: &Device,
         color_target_state: ColorTargetState,
@@ -244,7 +251,7 @@ impl WorldPipeline {
         command_encoder: &'a mut CommandEncoder,
         render_target_view: &TextureView,
         models: &HashMap<ModelId, Model>,
-        instances: Vec<(ModelId, u32, u32)>,
+        descriptor: DrawWorldDescriptor,
     ) {
         // begin render pass
         let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
@@ -274,7 +281,7 @@ impl WorldPipeline {
         render_pass.set_bind_group(0, &self.bind_group_0, &[]);
 
         // draw
-        for (name, start, end) in instances {
+        for (name, start, end) in descriptor.instance_indices {
             if start >= MAX_INSTANCE_COUNT as u32 {
                 continue;
             }
@@ -286,7 +293,10 @@ impl WorldPipeline {
         }
     }
 
-    pub fn enqueue_update_camera(&self, queue: &Queue, camera_controller: &CameraController) {
+    /// A method to update the camera uniform buffer.
+    ///
+    /// It enqueues a `write_buffer` queue to `queue`.
+    pub fn update_camera(&self, queue: &Queue, camera_controller: &CameraController) {
         let camera = Camera {
             _projection_matrix: Mat4::perspective_lh(
                 camera_controller.pov,
@@ -307,6 +317,7 @@ impl WorldPipeline {
         queue.write_buffer(&self.camera_buffer, 0, memory::anything_to_u8slice(&camera));
     }
 
+    /// A method to recreate and resize the depth texture.
     pub fn resize(&mut self, device: &Device, width: u32, height: u32) {
         self.depth_texture_view = depth::create_depth_texture_view(device, width, height);
     }

@@ -1,3 +1,3 @@
-pub(super) mod skybox;
-pub(super) mod ui;
-pub(super) mod world;
+pub mod skybox;
+pub mod ui;
+pub mod world;

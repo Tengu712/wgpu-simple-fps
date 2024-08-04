@@ -1,11 +1,15 @@
 pub mod model;
-mod shader;
+pub mod shader;
 mod texture;
 
 use crate::util::{camera::CameraController, instance::InstanceController};
 use futures::executor;
 use model::{Model, ModelId};
-use shader::{skybox::SkyboxPipeline, ui::UiPipeline, world::WorldPipeline};
+use shader::{
+    skybox::SkyboxPipeline,
+    ui::{DrawUiDescriptor, UiPipeline},
+    world::{DrawWorldDescriptor, WorldPipeline},
+};
 use std::{collections::HashMap, sync::Arc};
 use wgpu::{
     Backends, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, Instance,
@@ -23,16 +27,12 @@ pub enum RenderRequest {
     /// The indices in this array correspond to the indices in the instance buffer.
     /// If no update is needed, store `None`.
     UpdateWorldInstances(Vec<Option<InstanceController>>),
-    /// Specify the model id to attach and the start and end index of instances.
-    /// To reduce draw calls, you should group the same models together whenever possible.
-    DrawWorld(Vec<(ModelId, u32, u32)>),
+    DrawWorld(DrawWorldDescriptor),
     /// List the instance information.
     /// The indices in this array correspond to the indices in the instance buffer.
     /// If no update is needed, store `None`.
     UpdateUiInstances(Vec<Option<InstanceController>>),
-    /// Specify the start and end index of instances.
-    /// To reduce draw calls, you should group the same models together whenever possible.
-    DrawUi(Vec<(u32, u32)>),
+    DrawUi(DrawUiDescriptor),
 }
 
 /// A renderer on WebGPU.
@@ -233,7 +233,7 @@ impl<'a> Renderer<'a> {
             match request {
                 RenderRequest::UpdateCamera(camera_controller) => {
                     self.world_pipeline
-                        .enqueue_update_camera(&self.queue, &camera_controller);
+                        .update_camera(&self.queue, &camera_controller);
                     self.skybox_pipeline
                         .enqueue_update_camera(&self.queue, &camera_controller);
                 }
@@ -248,24 +248,24 @@ impl<'a> Renderer<'a> {
                     self.world_pipeline
                         .update_instances(&self.queue, instance_controllers);
                 }
-                RenderRequest::DrawWorld(instances) => {
+                RenderRequest::DrawWorld(descriptor) => {
                     self.world_pipeline.draw(
                         &mut command_encoder,
                         &render_target_view,
                         &self.models,
-                        instances,
+                        descriptor,
                     );
                 }
                 RenderRequest::UpdateUiInstances(instance_controllers) => {
                     self.ui_pipeline
                         .update_instances(&self.queue, instance_controllers);
                 }
-                RenderRequest::DrawUi(instances) => {
+                RenderRequest::DrawUi(descriptor) => {
                     self.ui_pipeline.draw(
                         &mut command_encoder,
                         &render_target_view,
                         &self.models[&ModelId::Square],
-                        instances,
+                        descriptor,
                     );
                 }
             }

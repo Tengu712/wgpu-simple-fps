@@ -7,7 +7,7 @@ use std::{borrow::Cow, cmp, mem};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferSize, BufferUsages,
+    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferSize, BufferUsages, Color,
     ColorTargetState, CommandEncoder, Device, FragmentState, IndexFormat, LoadOp, MultisampleState,
     Operations, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPassColorAttachment,
     RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderModuleDescriptor,
@@ -23,8 +23,17 @@ struct Camera {
 struct Instance {
     _model_matrix: Mat4,
 }
-
 const MAX_INSTANCE_COUNT: u64 = 16;
+
+/// A struct for descripting the detail of a draw request on an ui pipeline.
+pub struct DrawUiDescriptor {
+    /// Specify the color that the pipeline clears the render target view with.
+    /// If it's `None`, the pipeline doesn't clear the render target view.
+    pub clear_color: Option<[f64; 3]>,
+    /// Specify the start and end index of instances.
+    /// To reduce draw calls, you should group the same models together whenever possible.
+    pub instance_indices: Vec<(u32, u32)>,
+}
 
 /// A pipeline implementaion of ui.wgsl.
 pub struct UiPipeline {
@@ -35,6 +44,7 @@ pub struct UiPipeline {
 }
 
 impl UiPipeline {
+    /// A constructor.
     pub fn new(
         device: &Device,
         color_target_state: ColorTargetState,
@@ -211,16 +221,26 @@ impl UiPipeline {
         command_encoder: &'a mut CommandEncoder,
         render_target_view: &TextureView,
         square: &Model,
-        instances: Vec<(u32, u32)>,
+        descriptor: DrawUiDescriptor,
     ) {
         // begin render pass
+        let load = if let Some(n) = descriptor.clear_color {
+            LoadOp::Clear(Color {
+                r: n[0],
+                g: n[1],
+                b: n[2],
+                a: 1.0,
+            })
+        } else {
+            LoadOp::Load
+        };
         let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: render_target_view,
                 resolve_target: None,
                 ops: Operations {
-                    load: LoadOp::Load,
+                    load,
                     store: StoreOp::Store,
                 },
             })],
@@ -236,7 +256,7 @@ impl UiPipeline {
         render_pass.set_index_buffer(square.index_buffer.slice(..), IndexFormat::Uint16);
 
         // draw
-        for (start, end) in instances {
+        for (start, end) in descriptor.instance_indices {
             if start >= MAX_INSTANCE_COUNT as u32 {
                 continue;
             }
@@ -245,6 +265,9 @@ impl UiPipeline {
         }
     }
 
+    /// A method to resize the camera size.
+    ///
+    /// It enqueues a `write_buffer` queue to `queue`.
     pub fn resize(&mut self, queue: &Queue, width: u32, height: u32) {
         let half_width = width as f32 / 2.0;
         let half_height = height as f32 / 2.0;

@@ -1,7 +1,7 @@
 use super::{game::GameSceneState, Scene};
 use crate::system::{
     input::{InputStates, PressingInput},
-    renderer::RenderRequest,
+    renderer::{shader::ui::DrawUiDescriptor, RenderRequest},
 };
 
 /// A states of title scene.
@@ -26,6 +26,7 @@ impl TitleSceneState {
         input_states: &InputStates,
         render_requests: &mut Vec<RenderRequest>,
     ) -> Option<Scene> {
+        // update
         let next_scene = if input_states
             .pressing_input_states
             .get(&PressingInput::MouseLeft)
@@ -38,6 +39,14 @@ impl TitleSceneState {
             None
         };
 
+        // draw
+        // TODO: draw a title and a message
+        render_requests.push(RenderRequest::DrawUi(DrawUiDescriptor {
+            clear_color: Some([0.0, 0.0, 0.0]),
+            instance_indices: Vec::new(),
+        }));
+
+        // finish
         next_scene
     }
 }
