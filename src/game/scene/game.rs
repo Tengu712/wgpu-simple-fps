@@ -1,6 +1,9 @@
 use super::{title::TitleSceneState, Scene};
 use crate::{
-    game::entity::{floor::Floor, message::Message, reticle::Reticle, target::Target, wall::Wall},
+    game::entity::{
+        digits::Digits, floor::Floor, message::Message, reticle::Reticle, target::Target,
+        wall::Wall,
+    },
     system::{
         input::{InputStates, PressingInput},
         renderer::{
@@ -13,8 +16,14 @@ use crate::{
 };
 use glam::{Vec3, Vec4};
 
+enum State {
+    Game,
+    End,
+}
+
 /// A states of game scene.
 pub struct GameSceneState {
+    state: State,
     width: f32,
     height: f32,
     camera_controller: CameraController,
@@ -24,6 +33,8 @@ pub struct GameSceneState {
     reticle: Reticle,
     message: Option<Message>,
     indication: Option<Message>,
+    score_ui: Digits,
+    score: u32,
 }
 
 impl GameSceneState {
@@ -89,14 +100,16 @@ impl GameSceneState {
             Target::new(Vec3::new(15.0, 2.5, -15.0)),
             Target::new(Vec3::new(15.0, 3.0, 15.0)),
             Target::new(Vec3::new(0.0, 2.0, 35.0)),
-            Target::new(Vec3::new(30.0, 30.0, 10.0)),
+            Target::new(Vec3::new(30.0, 30.0, -20.0)),
         ]);
 
-        // create ui
+        // create uis
         let reticle = Reticle::new();
+        let score_ui = Digits::new(width / 2.0, height / 2.0, 100.0, 1200);
 
         // finish
         Self {
+            state: State::Game,
             width,
             height,
             camera_controller,
@@ -106,6 +119,8 @@ impl GameSceneState {
             reticle,
             message: None,
             indication: None,
+            score_ui,
+            score: 1200,
         }
     }
 
@@ -150,47 +165,10 @@ impl GameSceneState {
             self.camera_controller.position += velocity;
         }
 
-        // shoot
-        if pressing.get(&PressingInput::MouseLeft) == 1 {
-            let direction = self
-                .camera_controller
-                .rotation
-                .mul_vec3(Vec3::new(0.0, 0.0, 1.0));
-            self.targets
-                .retain(|n| !n.check_shot(self.camera_controller.position, direction));
-        }
-
-        // check game clear
-        if self.message.is_none() && self.targets.is_empty() {
-            let uv = if self.targets.is_empty() {
-                Vec4::new(0.0, 0.375, 0.8, 0.125)
-            } else {
-                panic!("unexpected error happens.");
-            };
-            let y = self.height * 0.25;
-            let message = Message::new(0.0, y, self.width * 0.3, uv);
-            let mut indication = Message::new(
-                0.0,
-                0.0,
-                self.width * 0.35,
-                Vec4::new(0.0, 0.25, 1.0, 0.125),
-            );
-            indication.set_position(
-                0.0,
-                y - message.get_height() / 2.0 - indication.get_height() / 2.0,
-            );
-            self.message = Some(message);
-            self.indication = Some(indication);
-        }
-
-        // get next scene
-        let next_scene = if self.message.is_some() && pressing.get(&PressingInput::KeyE) == 1 {
-            Some(Scene::TitleScene(TitleSceneState::new(
-                self.width,
-                self.height,
-            )))
-        } else {
-            None
+        // do depends on state
+        let next_scene = match self.state {
+            State::Game => self.update_game(input_states),
+            State::End => self.update_end(input_states),
         };
 
         // collect update requests
@@ -210,13 +188,16 @@ impl GameSceneState {
         if let Some(n) = &mut self.indication {
             update_ui_requests.push(n.get_instance_controller());
         }
+        for n in self.score_ui.get_instance_controllers() {
+            update_ui_requests.push(n);
+        }
 
         // define entities count on the world
         let static_entities_count = self.walls.len() as u32 + 1;
         let all_entities_count = static_entities_count + self.targets.len() as u32;
 
-        // define uis count
-        let uis_count = if self.message.is_some() { 3 } else { 1 };
+        // get uis count
+        let ui_entities_count = update_ui_requests.len();
 
         // draw
         render_requests.push(RenderRequest::UpdateCamera(self.camera_controller.clone()));
@@ -231,9 +212,62 @@ impl GameSceneState {
         render_requests.push(RenderRequest::UpdateUiInstances(update_ui_requests));
         render_requests.push(RenderRequest::DrawUi(DrawUiDescriptor {
             clear_color: None,
-            instance_indices: Vec::from([(0, uis_count)]),
+            instance_indices: Vec::from([(0, ui_entities_count as u32)]),
         }));
 
         next_scene
+    }
+
+    fn update_game(&mut self, input_states: &InputStates) -> Option<Scene> {
+        // decrement score
+        self.score = if self.score == 0 { 0 } else { self.score - 1 };
+        self.score_ui.set_number(self.score);
+
+        // shoot
+        if input_states.pressing.get(&PressingInput::MouseLeft) == 1 {
+            let direction = self
+                .camera_controller
+                .rotation
+                .mul_vec3(Vec3::new(0.0, 0.0, 1.0));
+            self.targets
+                .retain(|n| !n.check_shot(self.camera_controller.position, direction));
+        }
+
+        // check game clear or over
+        if self.targets.is_empty() || self.score == 0 {
+            let uv = if self.targets.is_empty() {
+                Vec4::new(0.0, 0.375, 0.8, 0.125)
+            } else {
+                Vec4::new(0.0, 0.5, 0.7, 0.125)
+            };
+            let y = self.height * 0.25;
+            let message = Message::new(0.0, y, self.width * 0.3, uv);
+            let mut indication = Message::new(
+                0.0,
+                0.0,
+                self.width * 0.35,
+                Vec4::new(0.0, 0.25, 1.0, 0.125),
+            );
+            indication.set_position(
+                0.0,
+                y - message.get_height() / 2.0 - indication.get_height() / 2.0,
+            );
+            self.message = Some(message);
+            self.indication = Some(indication);
+            self.state = State::End;
+        }
+
+        None
+    }
+
+    fn update_end(&mut self, input_states: &InputStates) -> Option<Scene> {
+        if input_states.pressing.get(&PressingInput::KeyE) == 1 {
+            Some(Scene::TitleScene(TitleSceneState::new(
+                self.width,
+                self.height,
+            )))
+        } else {
+            None
+        }
     }
 }
