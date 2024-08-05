@@ -1,4 +1,4 @@
-use super::Scene;
+use super::{title::TitleSceneState, Scene};
 use crate::{
     game::entity::{floor::Floor, message::Message, reticle::Reticle, target::Target, wall::Wall},
     system::{
@@ -24,7 +24,6 @@ pub struct GameSceneState {
     reticle: Reticle,
     message: Option<Message>,
     indication: Option<Message>,
-    is_shooting: bool,
 }
 
 impl GameSceneState {
@@ -107,7 +106,6 @@ impl GameSceneState {
             reticle,
             message: None,
             indication: None,
-            is_shooting: false,
         }
     }
 
@@ -123,18 +121,20 @@ impl GameSceneState {
         render_requests: &mut Vec<RenderRequest>,
     ) -> Option<Scene> {
         // rotate camera
-        let moving_input_state = &input_states.moving_input_state;
+        let moving = &input_states.moving;
         self.camera_controller.rotate(
-            moving_input_state.x as f32 / self.camera_controller.width * 90.0f32.to_radians(),
-            moving_input_state.y as f32 / self.camera_controller.height * 90.0f32.to_radians(),
+            moving.x as f32 / self.camera_controller.width * 90.0f32.to_radians(),
+            moving.y as f32 / self.camera_controller.height * 90.0f32.to_radians(),
         );
 
         // move camera
-        let pressing_input_state = &input_states.pressing_input_states;
-        let rl = pressing_input_state.get(&PressingInput::KeyD) as i32
-            - pressing_input_state.get(&PressingInput::KeyA) as i32;
-        let fb = pressing_input_state.get(&PressingInput::KeyW) as i32
-            - pressing_input_state.get(&PressingInput::KeyS) as i32;
+        let pressing = &input_states.pressing;
+        let r = pressing.get(&PressingInput::KeyD) > 0;
+        let l = pressing.get(&PressingInput::KeyA) > 0;
+        let f = pressing.get(&PressingInput::KeyW) > 0;
+        let b = pressing.get(&PressingInput::KeyS) > 0;
+        let rl = r as i32 - l as i32;
+        let fb = f as i32 - b as i32;
         if rl != 0 || fb != 0 {
             // create a correct velocity
             let mut velocity = self
@@ -151,17 +151,13 @@ impl GameSceneState {
         }
 
         // shoot
-        if pressing_input_state.get(&PressingInput::MouseLeft) {
-            if !self.is_shooting {
-                let direction = self
-                    .camera_controller
-                    .rotation
-                    .mul_vec3(Vec3::new(0.0, 0.0, 1.0));
-                self.targets
-                    .retain(|n| !n.check_shot(self.camera_controller.position, direction));
-            }
-        } else {
-            self.is_shooting = false;
+        if pressing.get(&PressingInput::MouseLeft) == 1 {
+            let direction = self
+                .camera_controller
+                .rotation
+                .mul_vec3(Vec3::new(0.0, 0.0, 1.0));
+            self.targets
+                .retain(|n| !n.check_shot(self.camera_controller.position, direction));
         }
 
         // check game clear
@@ -173,8 +169,12 @@ impl GameSceneState {
             };
             let y = self.height * 0.25;
             let message = Message::new(0.0, y, self.width * 0.3, uv);
-            let mut indication =
-                Message::new(0.0, 0.0, self.width * 0.35, Vec4::new(0.0, 0.25, 1.0, 0.125));
+            let mut indication = Message::new(
+                0.0,
+                0.0,
+                self.width * 0.35,
+                Vec4::new(0.0, 0.25, 1.0, 0.125),
+            );
             indication.set_position(
                 0.0,
                 y - message.get_height() / 2.0 - indication.get_height() / 2.0,
@@ -182,6 +182,16 @@ impl GameSceneState {
             self.message = Some(message);
             self.indication = Some(indication);
         }
+
+        // get next scene
+        let next_scene = if self.message.is_some() && pressing.get(&PressingInput::KeyE) == 1 {
+            Some(Scene::TitleScene(TitleSceneState::new(
+                self.width,
+                self.height,
+            )))
+        } else {
+            None
+        };
 
         // collect update requests
         let mut update_world_requests = Vec::new();
@@ -224,6 +234,6 @@ impl GameSceneState {
             instance_indices: Vec::from([(0, uis_count)]),
         }));
 
-        None
+        next_scene
     }
 }

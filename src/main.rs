@@ -169,7 +169,7 @@ impl<'a> ApplicationHandler for Application<'a> {
         self.scene_manager
             .update(self.input_manager.get(), &mut render_requests);
 
-        self.input_manager.clean();
+        self.input_manager.go_next();
         self.renderer.as_ref().unwrap().render(render_requests);
     }
 }

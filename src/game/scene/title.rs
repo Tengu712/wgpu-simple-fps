@@ -41,10 +41,7 @@ impl TitleSceneState {
         render_requests: &mut Vec<RenderRequest>,
     ) -> Option<Scene> {
         // update
-        let next_scene = if input_states
-            .pressing_input_states
-            .get(&PressingInput::MouseLeft)
-        {
+        let next_scene = if input_states.pressing.get(&PressingInput::KeyE) == 1 {
             Some(Scene::GameScene(GameSceneState::new(
                 self.width,
                 self.height,
