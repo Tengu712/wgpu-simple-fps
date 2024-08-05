@@ -25,4 +25,13 @@ where
             None
         }
     }
+
+    pub fn get(&self) -> &T {
+        &self.content
+    }
+
+    pub fn get_mut(&mut self) -> &mut T {
+        self.is_cached = false;
+        &mut self.content
+    }
 }

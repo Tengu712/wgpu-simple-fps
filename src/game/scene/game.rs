@@ -1,6 +1,6 @@
 use super::Scene;
 use crate::{
-    game::entity::{floor::Floor, reticle::Reticle, target::Target, wall::Wall},
+    game::entity::{floor::Floor, message::Message, reticle::Reticle, target::Target, wall::Wall},
     system::{
         input::{InputStates, PressingInput},
         renderer::{
@@ -11,15 +11,20 @@ use crate::{
     },
     util::camera::CameraController,
 };
-use glam::Vec3;
+use glam::{Vec3, Vec4};
 
 /// A states of game scene.
 pub struct GameSceneState {
+    width: f32,
+    height: f32,
     camera_controller: CameraController,
     floor: Floor,
     walls: [Wall; 8],
     targets: Vec<Target>,
     reticle: Reticle,
+    message: Option<Message>,
+    indication: Option<Message>,
+    is_shooting: bool,
 }
 
 impl GameSceneState {
@@ -93,11 +98,16 @@ impl GameSceneState {
 
         // finish
         Self {
+            width,
+            height,
             camera_controller,
             floor,
             walls,
             targets,
             reticle,
+            message: None,
+            indication: None,
+            is_shooting: false,
         }
     }
 
@@ -142,12 +152,35 @@ impl GameSceneState {
 
         // shoot
         if pressing_input_state.get(&PressingInput::MouseLeft) {
-            let direction = self
-                .camera_controller
-                .rotation
-                .mul_vec3(Vec3::new(0.0, 0.0, 1.0));
-            self.targets
-                .retain(|n| !n.check_shot(self.camera_controller.position, direction));
+            if !self.is_shooting {
+                let direction = self
+                    .camera_controller
+                    .rotation
+                    .mul_vec3(Vec3::new(0.0, 0.0, 1.0));
+                self.targets
+                    .retain(|n| !n.check_shot(self.camera_controller.position, direction));
+            }
+        } else {
+            self.is_shooting = false;
+        }
+
+        // check game clear
+        if self.message.is_none() && self.targets.is_empty() {
+            let uv = if self.targets.is_empty() {
+                Vec4::new(0.0, 0.375, 0.8, 0.125)
+            } else {
+                panic!("unexpected error happens.");
+            };
+            let y = self.height * 0.25;
+            let message = Message::new(0.0, y, self.width * 0.3, uv);
+            let mut indication =
+                Message::new(0.0, 0.0, self.width * 0.35, Vec4::new(0.0, 0.25, 1.0, 0.125));
+            indication.set_position(
+                0.0,
+                y - message.get_height() / 2.0 - indication.get_height() / 2.0,
+            );
+            self.message = Some(message);
+            self.indication = Some(indication);
         }
 
         // collect update requests
@@ -161,10 +194,19 @@ impl GameSceneState {
         }
         let mut update_ui_requests = Vec::new();
         update_ui_requests.push(self.reticle.get_instance_controller());
+        if let Some(n) = &mut self.message {
+            update_ui_requests.push(n.get_instance_controller());
+        }
+        if let Some(n) = &mut self.indication {
+            update_ui_requests.push(n.get_instance_controller());
+        }
 
         // define entities count on the world
         let static_entities_count = self.walls.len() as u32 + 1;
         let all_entities_count = static_entities_count + self.targets.len() as u32;
+
+        // define uis count
+        let uis_count = if self.message.is_some() { 3 } else { 1 };
 
         // draw
         render_requests.push(RenderRequest::UpdateCamera(self.camera_controller.clone()));
@@ -179,7 +221,7 @@ impl GameSceneState {
         render_requests.push(RenderRequest::UpdateUiInstances(update_ui_requests));
         render_requests.push(RenderRequest::DrawUi(DrawUiDescriptor {
             clear_color: None,
-            instance_indices: Vec::from([(0, 1)]),
+            instance_indices: Vec::from([(0, uis_count)]),
         }));
 
         None

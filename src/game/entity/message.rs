@@ -27,4 +27,14 @@ impl Message {
     pub fn get_instance_controller(&mut self) -> Option<InstanceController> {
         self.instance_controller.cache()
     }
+
+    /// A method to get the height.
+    pub fn get_height(&self) -> f32 {
+        self.instance_controller.get().scale.y
+    }
+
+    /// A method to set the position.
+    pub fn set_position(&mut self, x: f32, y: f32) {
+        self.instance_controller.get_mut().position = Vec3::new(x, y, 0.0);
+    }
 }
