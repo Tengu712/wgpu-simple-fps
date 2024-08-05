@@ -1,13 +1,18 @@
 use super::{game::GameSceneState, Scene};
-use crate::system::{
-    input::{InputStates, PressingInput},
-    renderer::{shader::ui::DrawUiDescriptor, RenderRequest},
+use crate::{
+    game::entity::message::Message,
+    system::{
+        input::{InputStates, PressingInput},
+        renderer::{shader::ui::DrawUiDescriptor, RenderRequest},
+    },
 };
+use glam::Vec4;
 
 /// A states of title scene.
 pub struct TitleSceneState {
     width: f32,
     height: f32,
+    message: Message,
 }
 
 impl TitleSceneState {
@@ -15,14 +20,23 @@ impl TitleSceneState {
     ///
     /// It needs screen width and screen height for create `GameSceneState`.
     pub fn new(width: f32, height: f32) -> Self {
-        Self { width, height }
+        Self {
+            width,
+            height,
+            message: Message::new(
+                0.0,
+                -height * 0.25,
+                width * 0.3,
+                Vec4::new(0.0, 0.125, 1.0, 0.125),
+            ),
+        }
     }
 
     /// A method to update the scene.
     ///
     /// If a player presses a mouse left button, it moves on to a game scene.
     pub fn update(
-        &self,
+        &mut self,
         input_states: &InputStates,
         render_requests: &mut Vec<RenderRequest>,
     ) -> Option<Scene> {
@@ -40,10 +54,12 @@ impl TitleSceneState {
         };
 
         // draw
-        // TODO: draw a title and a message
+        let mut update_requests = Vec::new();
+        update_requests.push(self.message.get_instance_controller());
+        render_requests.push(RenderRequest::UpdateUiInstances(update_requests));
         render_requests.push(RenderRequest::DrawUi(DrawUiDescriptor {
             clear_color: Some([0.0, 0.0, 0.0]),
-            instance_indices: Vec::new(),
+            instance_indices: Vec::from([(0, 1)]),
         }));
 
         // finish

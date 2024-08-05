@@ -1,20 +1,25 @@
 use crate::{
-    system::renderer::model::{self, Model},
+    system::renderer::{
+        model::{self, Model},
+        texture::image,
+    },
     util::{instance::InstanceController, memory, vector},
 };
-use glam::Mat4;
-use std::{borrow::Cow, cmp, mem};
+use glam::{Mat4, Vec4};
+use std::{borrow::Cow, cmp, mem, process};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferSize, BufferUsages, Color,
-    ColorTargetState, CommandEncoder, Device, FragmentState, IndexFormat, LoadOp, MultisampleState,
-    Operations, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPassColorAttachment,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderModuleDescriptor,
-    ShaderSource, ShaderStages, StoreOp, TextureView, VertexState,
+    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType, BufferSize,
+    BufferUsages, Color, ColorTargetState, CommandEncoder, Device, FragmentState, IndexFormat,
+    LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor, PrimitiveState, Queue,
+    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
+    SamplerBindingType, ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp,
+    TextureSampleType, TextureView, TextureViewDimension, VertexState,
 };
 
 const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/shader/ui.wgsl"));
+const IMAGE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/image/ui.png");
 
 struct Camera {
     _projection_matrix: Mat4,
@@ -22,6 +27,7 @@ struct Camera {
 #[derive(Clone)]
 struct Instance {
     _model_matrix: Mat4,
+    _tex_coord: Vec4,
 }
 const MAX_INSTANCE_COUNT: u64 = 16;
 
@@ -45,8 +51,11 @@ pub struct UiPipeline {
 
 impl UiPipeline {
     /// A constructor.
+    ///
+    /// NOTE: It needs a queue to create an image texture.
     pub fn new(
         device: &Device,
+        queue: &Queue,
         color_target_state: ColorTargetState,
         width: u32,
         height: u32,
@@ -81,6 +90,22 @@ impl UiPipeline {
                             mem::size_of::<Instance>() as u64 * MAX_INSTANCE_COUNT,
                         ),
                     },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
                     count: None,
                 },
             ],
@@ -140,6 +165,7 @@ impl UiPipeline {
             .into_iter()
             .map(|_| Instance {
                 _model_matrix: Mat4::IDENTITY,
+                _tex_coord: Vec4::new(0.0, 0.0, 1.0, 1.0),
             })
             .collect::<Vec<Instance>>();
         let instance_buffer = device.create_buffer_init(&BufferInitDescriptor {
@@ -147,6 +173,21 @@ impl UiPipeline {
             contents: memory::slice_to_u8slice(instances.as_slice()),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
+
+        // create a skybox image texture and a sampler
+        let image_texture_view = match image::create_image_texture_view(device, queue, IMAGE_PATH) {
+            Ok(n) => n,
+            Err(e) => {
+                error!(
+                    "UiPipeline.new",
+                    "failed to create an image texture: {}: {}",
+                    IMAGE_PATH,
+                    e.to_string()
+                );
+                process::exit(1);
+            }
+        };
+        let sampler = image::create_sampler(device);
 
         // create a bind group, @group(0)
         let bind_group_0 = device.create_bind_group(&BindGroupDescriptor {
@@ -160,6 +201,14 @@ impl UiPipeline {
                 BindGroupEntry {
                     binding: 1,
                     resource: instance_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::TextureView(&image_texture_view),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: BindingResource::Sampler(&sampler),
                 },
             ],
         });
@@ -186,6 +235,7 @@ impl UiPipeline {
                 _model_matrix: Mat4::from_scale_rotation_translation(
                     n.scale, n.rotation, n.position,
                 ),
+                _tex_coord: n.uv,
             },
         );
         for (i, n) in instances_group {

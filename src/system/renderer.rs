@@ -160,6 +160,7 @@ impl<'a> Renderer<'a> {
         );
         let ui_pipeline = UiPipeline::new(
             &device,
+            &queue,
             surface_format.into(),
             window.inner_size().width,
             window.inner_size().height,
