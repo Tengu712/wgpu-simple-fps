@@ -10,12 +10,13 @@ use std::{borrow::Cow, cmp, mem, process};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType, BufferSize,
-    BufferUsages, Color, ColorTargetState, CommandEncoder, Device, FragmentState, IndexFormat,
-    LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor, PrimitiveState, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
-    SamplerBindingType, ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp,
-    TextureSampleType, TextureView, TextureViewDimension, VertexState,
+    BindGroupLayoutEntry, BindingResource, BindingType, BlendComponent, BlendFactor,
+    BlendOperation, BlendState, Buffer, BufferBindingType, BufferSize, BufferUsages, Color,
+    ColorTargetState, CommandEncoder, Device, FragmentState, IndexFormat, LoadOp, MultisampleState,
+    Operations, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPassColorAttachment,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, SamplerBindingType,
+    ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, TextureSampleType, TextureView,
+    TextureViewDimension, VertexState,
 };
 
 const SHADER: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/shader/ui.wgsl"));
@@ -132,7 +133,22 @@ impl UiPipeline {
                 module: &shader_module,
                 entry_point: "fs_main",
                 compilation_options: Default::default(),
-                targets: &[Some(color_target_state)],
+                targets: &[Some(ColorTargetState {
+                    format: color_target_state.format,
+                    blend: Some(BlendState {
+                        color: BlendComponent {
+                            src_factor: BlendFactor::SrcAlpha,
+                            dst_factor: BlendFactor::OneMinusSrcAlpha,
+                            operation: BlendOperation::Add,
+                        },
+                        alpha: BlendComponent {
+                            src_factor: BlendFactor::SrcAlpha,
+                            dst_factor: BlendFactor::OneMinusSrcAlpha,
+                            operation: BlendOperation::Add,
+                        },
+                    }),
+                    write_mask: color_target_state.write_mask,
+                })],
             }),
             primitive: PrimitiveState::default(),
             depth_stencil: None,

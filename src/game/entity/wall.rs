@@ -1,4 +1,4 @@
-use crate::util::instance::InstanceController;
+use crate::util::{cache::Cache, instance::InstanceController};
 use glam::{Quat, Vec2, Vec3, Vec3Swizzles};
 
 fn cross(v1: Vec2, v2: Vec2) -> f32 {
@@ -24,7 +24,7 @@ fn get_intersection(p11: Vec2, p12: Vec2, p21: Vec2, p22: Vec2) -> Option<Vec2> 
 
 /// A wall entity on the world.
 pub struct Wall {
-    instance_controller: InstanceController,
+    instance_controller: Cache<InstanceController>,
     vertices: [Vec2; 5],
     edges: [Vec2; 4],
 }
@@ -36,31 +36,13 @@ impl Wall {
     /// * `rotation` - the rotation angle (rad) around y-axis
     /// * `scale` - the scale in the x-axis direction
     pub fn new(position: Vec3, rotation: f32, scale: Vec3) -> Self {
-        // instance controller
-        let mut instance_controller = InstanceController::default();
-        instance_controller.position = position;
-        instance_controller.rotation = Quat::from_rotation_y(rotation);
-        instance_controller.scale = scale;
-
-        // vertices and edges
+        let rotation = Quat::from_rotation_y(rotation);
         let hw = (scale.x / 2.0) + 1.0;
         let hd = (scale.z / 2.0) + 1.0;
-        let a = instance_controller
-            .rotation
-            .mul_vec3(Vec3::new(-hw, 0.0, -hd))
-            + instance_controller.position;
-        let b = instance_controller
-            .rotation
-            .mul_vec3(Vec3::new(hw, 0.0, -hd))
-            + instance_controller.position;
-        let c = instance_controller
-            .rotation
-            .mul_vec3(Vec3::new(hw, 0.0, hd))
-            + instance_controller.position;
-        let d = instance_controller
-            .rotation
-            .mul_vec3(Vec3::new(-hw, 0.0, hd))
-            + instance_controller.position;
+        let a = rotation.mul_vec3(Vec3::new(-hw, 0.0, -hd)) + position;
+        let b = rotation.mul_vec3(Vec3::new(hw, 0.0, -hd)) + position;
+        let c = rotation.mul_vec3(Vec3::new(hw, 0.0, hd)) + position;
+        let d = rotation.mul_vec3(Vec3::new(-hw, 0.0, hd)) + position;
         let vertices = [a.xz(), b.xz(), c.xz(), d.xz(), a.xz()];
         let edges = [
             b.xz() - a.xz(),
@@ -69,17 +51,23 @@ impl Wall {
             a.xz() - d.xz(),
         ];
 
-        // finish
         Self {
-            instance_controller,
+            instance_controller: Cache::new(InstanceController {
+                position,
+                scale,
+                rotation,
+                ..Default::default()
+            }),
             vertices,
             edges,
         }
     }
 
     /// A method to get the `InstanceController` of the wall entity.
-    pub fn get_instance_controller(&self) -> InstanceController {
-        self.instance_controller.clone()
+    ///
+    /// WARN: If no update is needed, return `None`.
+    pub fn get_instance_controller(&mut self) -> Option<InstanceController> {
+        self.instance_controller.cache()
     }
 
     /// A method to check if the wall entity and `position + velocity` is collided.
