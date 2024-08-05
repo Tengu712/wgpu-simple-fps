@@ -1,6 +1,6 @@
 use super::Scene;
 use crate::{
-    game::entity::{floor::Floor, reticle::Reticle, wall::Wall},
+    game::entity::{floor::Floor, reticle::Reticle, target::Target, wall::Wall},
     system::{
         input::{InputStates, PressingInput},
         renderer::{
@@ -18,6 +18,7 @@ pub struct GameSceneState {
     camera_controller: CameraController,
     floor: Floor,
     walls: [Wall; 8],
+    targets: Vec<Target>,
     reticle: Reticle,
 }
 
@@ -77,6 +78,17 @@ impl GameSceneState {
                 Vec3::new(18.0, 7.0, 1.0),
             ),
         ];
+
+        // create targets
+        let targets = Vec::from([
+            Target::new(Vec3::new(0.0, 2.0, 0.0)),
+            Target::new(Vec3::new(15.0, 2.5, -15.0)),
+            Target::new(Vec3::new(15.0, 3.0, 15.0)),
+            Target::new(Vec3::new(0.0, 2.0, 35.0)),
+            Target::new(Vec3::new(30.0, 30.0, 10.0)),
+        ]);
+
+        // create ui
         let reticle = Reticle::new();
 
         // finish
@@ -84,6 +96,7 @@ impl GameSceneState {
             camera_controller,
             floor,
             walls,
+            targets,
             reticle,
         }
     }
@@ -127,20 +140,41 @@ impl GameSceneState {
             self.camera_controller.position += velocity;
         }
 
+        // shoot
+        if pressing_input_state.get(&PressingInput::MouseLeft) {
+            let direction = self
+                .camera_controller
+                .rotation
+                .mul_vec3(Vec3::new(0.0, 0.0, 1.0));
+            self.targets
+                .retain(|n| !n.check_shot(self.camera_controller.position, direction));
+        }
+
         // collect update requests
         let mut update_world_requests = Vec::new();
         for n in &mut self.walls {
             update_world_requests.push(n.get_instance_controller());
         }
         update_world_requests.push(self.floor.get_instance_controller());
+        for n in &mut self.targets {
+            update_world_requests.push(Some(n.get_instance_controller()));
+        }
         let mut update_ui_requests = Vec::new();
         update_ui_requests.push(self.reticle.get_instance_controller());
 
+        // define entities count on the world
+        let static_entities_count = self.walls.len() as u32 + 1;
+        let all_entities_count = static_entities_count + self.targets.len() as u32;
+
+        // draw
         render_requests.push(RenderRequest::UpdateCamera(self.camera_controller.clone()));
         render_requests.push(RenderRequest::DrawSkybox);
         render_requests.push(RenderRequest::UpdateWorldInstances(update_world_requests));
         render_requests.push(RenderRequest::DrawWorld(DrawWorldDescriptor {
-            instance_indices: Vec::from([(ModelId::Cube, 0, self.walls.len() as u32 + 1)]),
+            instance_indices: Vec::from([
+                (ModelId::Cube, 0, static_entities_count),
+                (ModelId::Sphere, static_entities_count, all_entities_count),
+            ]),
         }));
         render_requests.push(RenderRequest::UpdateUiInstances(update_ui_requests));
         render_requests.push(RenderRequest::DrawUi(DrawUiDescriptor {
