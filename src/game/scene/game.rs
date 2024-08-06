@@ -135,7 +135,7 @@ impl GameSceneState {
             message: None,
             indication: None,
             score_ui,
-            score: 1380,
+            score: 1200,
         }
     }
 

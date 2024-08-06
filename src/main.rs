@@ -23,7 +23,7 @@ use winit::{
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::KeyCode,
-    window::{CursorGrabMode, Fullscreen, Window, WindowButtons, WindowId},
+    window::{Fullscreen, Window, WindowButtons, WindowId},
 };
 
 fn set_cursor_center(window: &Arc<Window>) -> (f64, f64) {
@@ -83,13 +83,6 @@ impl<'a> ApplicationHandler for Application<'a> {
         // configure the window
         window.set_enabled_buttons(WindowButtons::CLOSE | WindowButtons::MINIMIZE);
         window.set_cursor_visible(false);
-        if let Err(e) = window.set_cursor_grab(CursorGrabMode::Confined) {
-            warn!(
-                "Application.resumed",
-                "failed to confine cursor: {}",
-                e.to_string()
-            );
-        }
         info!("Application.resumed", "window created.");
 
         // create a renderer

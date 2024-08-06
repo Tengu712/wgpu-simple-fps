@@ -13,11 +13,16 @@ use shader::{
 use std::{collections::HashMap, sync::Arc};
 use wgpu::{
     Backends, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, Instance,
-    InstanceDescriptor, Limits, MemoryHints, PowerPreference, Queue, RequestAdapterOptions,
-    Surface, SurfaceCapabilities, SurfaceConfiguration, TextureFormat, TextureUsages,
-    TextureViewDescriptor,
+    InstanceDescriptor, Limits, MemoryHints, PowerPreference, PresentMode, Queue,
+    RequestAdapterOptions, Surface, SurfaceCapabilities, SurfaceConfiguration, TextureFormat,
+    TextureUsages, TextureViewDescriptor,
 };
 use winit::window::Window;
+
+#[cfg(target_os = "windows")]
+const BACKEND: Backends = Backends::DX12;
+#[cfg(not(target_os = "windows"))]
+const BACKEND: Backends = Backends::all();
 
 /// A enum for enumerating requests for a renderer.
 pub enum RenderRequest {
@@ -58,7 +63,7 @@ impl<'a> Renderer<'a> {
     pub fn new(window: Arc<Window>) -> Self {
         // create an instance
         let instance = Instance::new(InstanceDescriptor {
-            backends: Backends::all(),
+            backends: BACKEND,
             ..Default::default()
         });
 
@@ -137,7 +142,7 @@ impl<'a> Renderer<'a> {
                 format: surface_format,
                 width: window.inner_size().width,
                 height: window.inner_size().height,
-                present_mode: surface_capabilities.present_modes[0],
+                present_mode: PresentMode::Immediate,
                 view_formats: Vec::new(),
                 alpha_mode: surface_capabilities.alpha_modes[0],
                 desired_maximum_frame_latency: 2,
