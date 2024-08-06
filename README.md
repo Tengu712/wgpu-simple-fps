@@ -23,3 +23,11 @@ About other aspects:
 - First-person movement
 - Wall collisions
 - Target shooting
+
+## Build
+
+On Windows, macOS or Linux:
+
+1. install Rust
+2. compile and run `model/create.rs`
+3. `cargo build`
