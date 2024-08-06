@@ -6,7 +6,6 @@
 //! - unresizable
 //! - the maximize button is disabled
 //! - the cursor is invisible
-//! - the cursor is confined to the window area (if possible)
 
 #[macro_use]
 mod log;

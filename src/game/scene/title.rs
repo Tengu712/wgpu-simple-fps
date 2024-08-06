@@ -17,8 +17,6 @@ pub struct TitleSceneState {
 
 impl TitleSceneState {
     /// A constructor.
-    ///
-    /// It needs screen width and screen height for create `GameSceneState`.
     pub fn new(width: f32, height: f32) -> Self {
         Self {
             width,
@@ -33,8 +31,6 @@ impl TitleSceneState {
     }
 
     /// A method to update the scene.
-    ///
-    /// If a player presses a mouse left button, it moves on to a game scene.
     pub fn update(
         &mut self,
         input_states: &InputStates,

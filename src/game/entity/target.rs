@@ -27,6 +27,7 @@ impl Target {
         self.instance_controller.clone()
     }
 
+    /// A method to update this by calling `update_function`.
     pub fn update(&mut self) {
         (self.update_function)(&mut self.instance_controller.position, self.count);
         self.count += 1;

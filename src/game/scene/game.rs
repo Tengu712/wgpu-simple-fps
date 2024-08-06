@@ -145,6 +145,7 @@ impl GameSceneState {
         self.camera_controller.height = height;
     }
 
+    /// A method to update the scene.
     pub fn update(
         &mut self,
         input_states: &InputStates,
