@@ -96,11 +96,26 @@ impl GameSceneState {
 
         // create targets
         let targets = Vec::from([
-            Target::new(Vec3::new(0.0, 2.0, 0.0)),
-            Target::new(Vec3::new(15.0, 2.5, -15.0)),
-            Target::new(Vec3::new(15.0, 3.0, 15.0)),
-            Target::new(Vec3::new(0.0, 2.0, 35.0)),
-            Target::new(Vec3::new(30.0, 30.0, -20.0)),
+            Target::new(Vec3::new(15.0, 2.5, -15.0), Box::new(|_, _| ())),
+            Target::new(
+                Vec3::new(0.0, 2.0, 0.0),
+                Box::new(|n: &mut Vec3, i: u32| n.y = (i as f32).to_radians().sin() * 2.0 + 3.0),
+            ),
+            Target::new(Vec3::new(15.0, 3.0, 15.0), Box::new(|_, _| ())),
+            Target::new(
+                Vec3::new(0.0, 2.0, 35.0),
+                Box::new(|n: &mut Vec3, i: u32| {
+                    *n = Vec3::new(
+                        ((i / 40) as f32 * 51.0).to_radians().sin(),
+                        ((i / 40) as f32 * 79.0).to_radians().sin() + 2.5,
+                        35.0,
+                    )
+                }),
+            ),
+            Target::new(
+                Vec3::new(25.0, 30.0, -20.0),
+                Box::new(|n: &mut Vec3, i: u32| n.z = (i as f32).to_radians().sin() * 2.0 + -20.0),
+            ),
         ]);
 
         // create uis
@@ -120,7 +135,7 @@ impl GameSceneState {
             message: None,
             indication: None,
             score_ui,
-            score: 1200,
+            score: 1380,
         }
     }
 
@@ -170,6 +185,12 @@ impl GameSceneState {
             State::Game => self.update_game(input_states),
             State::End => self.update_end(input_states),
         };
+
+        // update targets
+        // NOTE: Update targets after player's shooting is processed.
+        for n in &mut self.targets {
+            n.update();
+        }
 
         // collect update requests
         let mut update_world_requests = Vec::new();
