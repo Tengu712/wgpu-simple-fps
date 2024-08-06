@@ -1,5 +1,7 @@
 # wgpu Simple FPS
 
+![](./screenshot.png)
+
 ## What is this?
 
 This is a simple FPS game created to learn [wgpu](https://github.com/gfx-rs/wgpu).
